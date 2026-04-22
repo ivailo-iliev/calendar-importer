@@ -195,7 +195,7 @@
           <textarea id="payload" spellcheck="false"></textarea>
         </div>
         <div class="hint">
-          URL shape: <code>/import?payload64=&lt;deflate+base64url&gt;</code>
+          URL shape: <code>/import?payload64=&lt;deflate-raw+base64url&gt;</code>
         </div>
       </section>
     </main>
@@ -440,7 +440,7 @@
           setStatus("Loaded and expanded payload64 from URL.", "ok");
         } catch (error) {
           payloadEl.value = raw;
-          setStatus("payload64 is not valid deflate+base64url JSON. You can correct it manually.", "error");
+          setStatus("payload64 is not valid deflate-raw+base64url JSON. Plain deflate is not accepted by this decoder. You can correct it manually.", "error");
         }
       }
 
