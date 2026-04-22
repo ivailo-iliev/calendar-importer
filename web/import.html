@@ -222,6 +222,7 @@
       let googleClientId = "";
       let authInProgress = false;
       let authProgressTimeoutId = null;
+      let googleAuthUnavailable = false;
 
       function startAuthProgress() {
         authInProgress = true;
@@ -396,15 +397,17 @@
       function updateAuthUi() {
         const connected = Boolean(accessToken);
         authStateEl.textContent = connected ? "Google: connected" : "Google: not connected";
-        authActionBtn.disabled = authInProgress;
+        authActionBtn.disabled = authInProgress || googleAuthUnavailable;
         if (authInProgress) {
           authActionBtn.textContent = connected ? "Signing Out…" : "Signing In…";
+        } else if (googleAuthUnavailable) {
+          authActionBtn.textContent = "Google Auth Unavailable";
         } else {
           authActionBtn.textContent = connected ? "Sign Out" : "Sign In With Google";
         }
         authActionBtn.classList.toggle("secondary", connected);
-        createBtn.disabled = !connected || authInProgress;
-        if (!connected || authInProgress) {
+        createBtn.disabled = googleAuthUnavailable || !connected || authInProgress;
+        if (googleAuthUnavailable || !connected || authInProgress) {
           calendarSelectEl.disabled = true;
         }
       }
@@ -577,6 +580,9 @@
       });
 
       async function boot() {
+        const GOOGLE_SCRIPT_MAX_WAIT_MS = 12000;
+        const GOOGLE_SCRIPT_POLL_INTERVAL_MS = 100;
+
         await decodePayloadFromUrl();
         accessToken = restoreAccessTokenFromStorage();
         populateCalendars([]);
@@ -588,27 +594,46 @@
           authActionBtn.disabled = true;
           return;
         }
+        const googleScriptWaitStartedAt = Date.now();
+        let googleScriptResolved = false;
+        const resolveGoogleScriptReady = () => {
+          if (googleScriptResolved) return;
+          googleScriptResolved = true;
+          window.clearInterval(waitForGoogle);
+          initGoogleAuth();
+          if (accessToken) {
+            loadCalendars()
+              .then(() => {
+                setStatus("Restored Google access from browser storage.", "ok");
+              })
+              .catch(() => {
+                accessToken = "";
+                clearPersistedAccessToken();
+                updateAuthUi();
+                requestSilentAccessToken();
+                setStatus("Stored Google access token expired. Attempting silent sign-in.", "");
+              });
+          } else {
+            requestSilentAccessToken();
+          }
+        };
+        const resolveGoogleScriptTimeout = () => {
+          if (googleScriptResolved) return;
+          googleScriptResolved = true;
+          googleAuthUnavailable = true;
+          window.clearInterval(waitForGoogle);
+          updateAuthUi();
+          setStatus("Google auth script failed to load in time. Authentication is unavailable, so event creation is disabled.", "error");
+        };
         const waitForGoogle = window.setInterval(() => {
           if (window.google) {
-            window.clearInterval(waitForGoogle);
-            initGoogleAuth();
-            if (accessToken) {
-              loadCalendars()
-                .then(() => {
-                  setStatus("Restored Google access from browser storage.", "ok");
-                })
-                .catch(() => {
-                  accessToken = "";
-                  clearPersistedAccessToken();
-                  updateAuthUi();
-                  requestSilentAccessToken();
-                  setStatus("Stored Google access token expired. Attempting silent sign-in.", "");
-                });
-            } else {
-              requestSilentAccessToken();
-            }
+            resolveGoogleScriptReady();
+            return;
           }
-        }, 100);
+          if (Date.now() - googleScriptWaitStartedAt >= GOOGLE_SCRIPT_MAX_WAIT_MS) {
+            resolveGoogleScriptTimeout();
+          }
+        }, GOOGLE_SCRIPT_POLL_INTERVAL_MS);
       }
 
       boot();
