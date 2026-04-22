@@ -7,14 +7,20 @@
     <style>
       :root {
         color-scheme: light dark;
-        --bg: Canvas;
-        --panel: Canvas;
-        --ink: CanvasText;
-        --muted: GrayText;
-        --line: ButtonBorder;
-        --accent: LinkText;
-        --ok: CanvasText;
-        --err: CanvasText;
+        --bg: light-dark(#f5f5f3, #111315);
+        --panel: light-dark(#fcfcfa, #171a1d);
+        --ink: light-dark(#1a1d21, #f2f4f6);
+        --muted: light-dark(#5f6873, #a9b1ba);
+        --line: light-dark(rgb(26 29 33 / 0.12), rgb(242 244 246 / 0.12));
+        --accent: light-dark(#0b57d0, #8ab4f8);
+        --field-bg: light-dark(#ffffff, #20252b);
+        --field-ink: light-dark(#1a1d21, #f2f4f6);
+        --ok: light-dark(#166534, #86efac);
+        --ok-bg: light-dark(#edf9f0, #112018);
+        --ok-line: light-dark(#86d19d, #2f6f44);
+        --err: light-dark(#b42318, #ff9b8f);
+        --err-bg: light-dark(#fef3f2, #231516);
+        --err-line: light-dark(#f3b0aa, #7a2e28);
       }
 
       * {
@@ -74,11 +80,11 @@
         font: inherit;
         cursor: pointer;
         background: var(--accent);
-        color: Canvas;
+        color: light-dark(#ffffff, #08111f);
       }
 
       button.secondary {
-        background: ButtonFace;
+        background: var(--field-bg);
         color: var(--ink);
         border: 0.0625rem solid var(--line);
       }
@@ -106,29 +112,31 @@
         border-radius: 0.75rem;
         padding: 0.625rem 0.75rem;
         font: inherit;
-        color: var(--ink);
-        background: Field;
+        color: var(--field-ink);
+        background: var(--field-bg);
+        -webkit-appearance: none;
+        appearance: none;
       }
 
       .status {
         margin: 1rem 1.375rem 0;
         padding: 0.75rem 0.875rem;
         border-radius: 0.75rem;
-        background: Field;
+        background: var(--field-bg);
         border: 0.0625rem solid var(--line);
         white-space: pre-wrap;
       }
 
       .status.ok {
-        border-color: Highlight;
+        border-color: var(--ok-line);
         color: var(--ok);
-        background: Canvas;
+        background: var(--ok-bg);
       }
 
       .status.error {
-        border-color: LinkText;
+        border-color: var(--err-line);
         color: var(--err);
-        background: Canvas;
+        background: var(--err-bg);
       }
 
       .grid {
@@ -151,7 +159,7 @@
         align-items: center;
         justify-content: center;
         border-radius: 0.75rem;
-        background: ButtonFace;
+        background: var(--field-bg);
         color: var(--ink);
         box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.08);
       }
@@ -164,8 +172,8 @@
         border-radius: 0.875rem;
         padding: 3.75rem 1rem 1rem;
         font: 0.875rem/1.5 monospace;
-        color: var(--ink);
-        background: Field;
+        color: var(--field-ink);
+        background: var(--field-bg);
       }
 
       .footer {
