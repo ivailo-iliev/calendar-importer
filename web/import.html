@@ -176,8 +176,7 @@
           <p>Paste or load compact JSON, sign in with Google, then create calendar events.</p>
         </div>
         <div class="controls">
-          <button id="sign-in" type="button">Sign In With Google</button>
-          <button id="sign-out" type="button" class="secondary" disabled>Sign Out</button>
+          <button id="auth-action" type="button">Sign In With Google</button>
           <button id="format-json" type="button" class="secondary">Format JSON</button>
           <button id="create-events" type="button" disabled>Create Events</button>
         </div>
@@ -204,8 +203,7 @@
     <script>
       const statusEl = document.getElementById("status");
       const payloadEl = document.getElementById("payload");
-      const signInBtn = document.getElementById("sign-in");
-      const signOutBtn = document.getElementById("sign-out");
+      const authActionBtn = document.getElementById("auth-action");
       const formatBtn = document.getElementById("format-json");
       const createBtn = document.getElementById("create-events");
       const authStateEl = document.getElementById("auth-state");
@@ -215,10 +213,79 @@
         "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
       ].join(" ");
+      const ACCESS_TOKEN_STORAGE_KEY = "scheduleImportGoogleAccessToken";
+      const ACCESS_TOKEN_EXPIRY_STORAGE_KEY = "scheduleImportGoogleAccessTokenExpiry";
+      const ACCESS_TOKEN_EXPIRY_SKEW_MS = 30 * 1000;
 
       let accessToken = "";
       let tokenClient = null;
       let googleClientId = "";
+      let authInProgress = false;
+      let authProgressTimeoutId = null;
+
+      function startAuthProgress() {
+        authInProgress = true;
+        if (authProgressTimeoutId) {
+          window.clearTimeout(authProgressTimeoutId);
+        }
+        authProgressTimeoutId = window.setTimeout(() => {
+          authInProgress = false;
+          authProgressTimeoutId = null;
+          updateAuthUi();
+        }, 10000);
+        updateAuthUi();
+      }
+
+      function finishAuthProgress() {
+        authInProgress = false;
+        if (authProgressTimeoutId) {
+          window.clearTimeout(authProgressTimeoutId);
+          authProgressTimeoutId = null;
+        }
+        updateAuthUi();
+      }
+
+      function persistAccessToken(token, expiresInSeconds) {
+        if (!token) return;
+        const expiresInMs = Number(expiresInSeconds) > 0 ? Number(expiresInSeconds) * 1000 : 0;
+        const expiresAt = Date.now() + expiresInMs;
+        try {
+          window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+          if (expiresInMs > 0) {
+            window.localStorage.setItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY, String(expiresAt));
+          } else {
+            window.localStorage.removeItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY);
+          }
+        } catch (error) {
+          // Ignore localStorage failures and continue in-memory only.
+        }
+      }
+
+      function clearPersistedAccessToken() {
+        try {
+          window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+          window.localStorage.removeItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY);
+        } catch (error) {
+          // Ignore localStorage failures and continue in-memory only.
+        }
+      }
+
+      function restoreAccessTokenFromStorage() {
+        try {
+          const storedToken = window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "";
+          const storedExpiryRaw = window.localStorage.getItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY) || "";
+          const storedExpiry = Number(storedExpiryRaw);
+          const hasExpiry = Number.isFinite(storedExpiry) && storedExpiry > 0;
+          if (!storedToken) return "";
+          if (hasExpiry && storedExpiry - ACCESS_TOKEN_EXPIRY_SKEW_MS <= Date.now()) {
+            clearPersistedAccessToken();
+            return "";
+          }
+          return storedToken;
+        } catch (error) {
+          return "";
+        }
+      }
 
       function selectedCalendarId() {
         return calendarSelectEl.value || "primary";
@@ -257,9 +324,15 @@
       function updateAuthUi() {
         const connected = Boolean(accessToken);
         authStateEl.textContent = connected ? "Google: connected" : "Google: not connected";
-        createBtn.disabled = !connected;
-        signOutBtn.disabled = !connected;
-        if (!connected) {
+        authActionBtn.disabled = authInProgress;
+        if (authInProgress) {
+          authActionBtn.textContent = connected ? "Signing Out…" : "Signing In…";
+        } else {
+          authActionBtn.textContent = connected ? "Sign Out" : "Sign In With Google";
+        }
+        authActionBtn.classList.toggle("secondary", connected);
+        createBtn.disabled = !connected || authInProgress;
+        if (!connected || authInProgress) {
           calendarSelectEl.disabled = true;
         }
       }
@@ -314,7 +387,7 @@
         googleClientId = data.googleClientId || "";
         if (!googleClientId) {
           setStatus("Missing GOOGLE_CLIENT_ID in Netlify environment.", "error");
-          signInBtn.disabled = true;
+          authActionBtn.disabled = true;
           return;
         }
         setStatus("Configuration loaded. Sign in to enable event creation.", "");
@@ -327,9 +400,14 @@
         tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
           scope: GOOGLE_SCOPES,
+          error_callback: () => {
+            finishAuthProgress();
+          },
           callback: (response) => {
+            finishAuthProgress();
             if (response && response.access_token) {
               accessToken = response.access_token;
+              persistAccessToken(accessToken, response.expires_in);
               updateAuthUi();
               loadCalendars()
                 .then(() => {
@@ -343,22 +421,37 @@
         });
       }
 
-      signInBtn.addEventListener("click", () => {
+      function requestSilentAccessToken() {
+        if (!tokenClient) return;
+        startAuthProgress();
+        try {
+          tokenClient.requestAccessToken({ prompt: "" });
+        } catch (error) {
+          finishAuthProgress();
+          // Ignore silent auth failures; user can still use explicit sign-in.
+        }
+      }
+
+      authActionBtn.addEventListener("click", () => {
+        if (authInProgress) return;
+        if (accessToken) {
+          startAuthProgress();
+          if (window.google && google.accounts && google.accounts.oauth2) {
+            google.accounts.oauth2.revoke(accessToken, () => {});
+          }
+          accessToken = "";
+          clearPersistedAccessToken();
+          populateCalendars([]);
+          finishAuthProgress();
+          setStatus("Google access revoked for this page session.", "");
+          return;
+        }
         if (!tokenClient) {
           setStatus("Google auth is not ready yet.", "error");
           return;
         }
-        tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
-      });
-
-      signOutBtn.addEventListener("click", () => {
-        if (accessToken && window.google && google.accounts && google.accounts.oauth2) {
-          google.accounts.oauth2.revoke(accessToken, () => {});
-        }
-        accessToken = "";
-        populateCalendars([]);
-        updateAuthUi();
-        setStatus("Google access revoked for this page session.", "");
+        startAuthProgress();
+        tokenClient.requestAccessToken({ prompt: "consent" });
       });
 
       formatBtn.addEventListener("click", () => {
@@ -405,19 +498,35 @@
 
       async function boot() {
         decodePayloadFromUrl();
+        accessToken = restoreAccessTokenFromStorage();
         populateCalendars([]);
         updateAuthUi();
         try {
           await loadConfig();
         } catch (error) {
           setStatus(`Failed to load runtime config: ${error.message}`, "error");
-          signInBtn.disabled = true;
+          authActionBtn.disabled = true;
           return;
         }
         const waitForGoogle = window.setInterval(() => {
           if (window.google) {
             window.clearInterval(waitForGoogle);
             initGoogleAuth();
+            if (accessToken) {
+              loadCalendars()
+                .then(() => {
+                  setStatus("Restored Google access from browser storage.", "ok");
+                })
+                .catch(() => {
+                  accessToken = "";
+                  clearPersistedAccessToken();
+                  updateAuthUi();
+                  requestSilentAccessToken();
+                  setStatus("Stored Google access token expired. Attempting silent sign-in.", "");
+                });
+            } else {
+              requestSilentAccessToken();
+            }
           }
         }, 100);
       }
