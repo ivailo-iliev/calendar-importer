@@ -1,0 +1,9 @@
+{
+  "name": "schedule-import-netlify",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Netlify import page and functions for schedule JSON calendar creation.",
+  "dependencies": {
+    "googleapis": "^148.0.0"
+  }
+}

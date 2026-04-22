@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Schedule Import</title>
+    <style>
+      :root {
+        --bg: #f3efe6;
+        --panel: #fffaf2;
+        --ink: #1f1d1a;
+        --muted: #655d54;
+        --line: #d8cfc1;
+        --accent: #176b87;
+        --accent-2: #b85c38;
+        --ok: #2f6f3e;
+        --err: #9d2a2a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(184, 92, 56, 0.12), transparent 32%),
+          linear-gradient(180deg, #efe7da 0%, var(--bg) 100%);
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 16px 40px rgba(49, 43, 35, 0.08);
+        overflow: hidden;
+      }
+
+      .header {
+        padding: 20px 22px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.1;
+      }
+
+      p {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 16px 22px 0;
+      }
+
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 11px 16px;
+        font: inherit;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      button.secondary {
+        background: #ebe2d3;
+        color: var(--ink);
+      }
+
+      button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 14px 22px 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .selector-row {
+        padding: 14px 22px 0;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      select {
+        width: 100%;
+        max-width: 420px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font: inherit;
+        color: var(--ink);
+        background: #fffdf8;
+      }
+
+      .status {
+        margin: 16px 22px 0;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #f4ecdf;
+        border: 1px solid var(--line);
+        white-space: pre-wrap;
+      }
+
+      .status.ok {
+        border-color: rgba(47, 111, 62, 0.25);
+        color: var(--ok);
+        background: rgba(47, 111, 62, 0.08);
+      }
+
+      .status.error {
+        border-color: rgba(157, 42, 42, 0.25);
+        color: var(--err);
+        background: rgba(157, 42, 42, 0.08);
+      }
+
+      .grid {
+        padding: 16px 22px 22px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 420px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: var(--ink);
+        background: #fffdf8;
+      }
+
+      .hint {
+        padding: 0 22px 22px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+    </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <main>
+      <section class="panel">
+        <div class="header">
+          <h1>Schedule Import</h1>
+          <p>Paste or load compact JSON, sign in with Google, then create calendar events.</p>
+        </div>
+        <div class="controls">
+          <button id="sign-in" type="button">Sign In With Google</button>
+          <button id="sign-out" type="button" class="secondary" disabled>Sign Out</button>
+          <button id="format-json" type="button" class="secondary">Format JSON</button>
+          <button id="create-events" type="button" disabled>Create Events</button>
+        </div>
+        <div class="meta">
+          <div id="auth-state">Google: not connected</div>
+          <div>Required timezone: <code>Europe/Sofia</code></div>
+        </div>
+        <div class="selector-row">
+          <label for="calendar-select">Target calendar</label>
+          <select id="calendar-select" disabled>
+            <option value="primary">Primary</option>
+          </select>
+        </div>
+        <div id="status" class="status">Loading configuration…</div>
+        <div class="grid">
+          <textarea id="payload" spellcheck="false"></textarea>
+        </div>
+        <div class="hint">
+          URL shape: <code>/import?payload=%7B...%7D</code>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const payloadEl = document.getElementById("payload");
+      const signInBtn = document.getElementById("sign-in");
+      const signOutBtn = document.getElementById("sign-out");
+      const formatBtn = document.getElementById("format-json");
+      const createBtn = document.getElementById("create-events");
+      const authStateEl = document.getElementById("auth-state");
+      const calendarSelectEl = document.getElementById("calendar-select");
+
+      let accessToken = "";
+      let tokenClient = null;
+      let googleClientId = "";
+
+      function selectedCalendarId() {
+        return calendarSelectEl.value || "primary";
+      }
+
+      function populateCalendars(calendars) {
+        const items = Array.isArray(calendars) ? calendars.slice() : [];
+        items.sort((a, b) => {
+          if (a.primary && !b.primary) return -1;
+          if (!a.primary && b.primary) return 1;
+          return String(a.summary || "").localeCompare(String(b.summary || ""));
+        });
+        calendarSelectEl.innerHTML = "";
+        if (!items.length) {
+          const option = document.createElement("option");
+          option.value = "primary";
+          option.textContent = "Primary";
+          calendarSelectEl.appendChild(option);
+          calendarSelectEl.disabled = true;
+          return;
+        }
+        for (const item of items) {
+          const option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = item.primary ? `${item.summary} (Primary)` : item.summary;
+          calendarSelectEl.appendChild(option);
+        }
+        calendarSelectEl.disabled = false;
+      }
+
+      function setStatus(message, kind = "") {
+        statusEl.className = `status${kind ? ` ${kind}` : ""}`;
+        statusEl.textContent = message;
+      }
+
+      function updateAuthUi() {
+        const connected = Boolean(accessToken);
+        authStateEl.textContent = connected ? "Google: connected" : "Google: not connected";
+        createBtn.disabled = !connected;
+        signOutBtn.disabled = !connected;
+        if (!connected) {
+          calendarSelectEl.disabled = true;
+        }
+      }
+
+      async function loadCalendars() {
+        const response = await fetch("/.netlify/functions/list-calendars", {
+          headers: {
+            accept: "application/json",
+            authorization: `Bearer ${accessToken}`,
+          },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load calendars.");
+        }
+        populateCalendars(data.calendars || []);
+      }
+
+      function decodePayloadFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get("payload");
+        if (!raw) {
+          payloadEl.value = '{\n  "tz": "Europe/Sofia",\n  "ev": []\n}';
+          setStatus("No payload parameter found. Paste JSON or reopen with ?payload=...", "");
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          payloadEl.value = JSON.stringify(parsed, null, 2);
+          setStatus("Loaded JSON payload from URL.", "ok");
+        } catch (error) {
+          payloadEl.value = raw;
+          setStatus("Payload parameter is not valid JSON. You can correct it manually.", "error");
+        }
+      }
+
+      async function loadConfig() {
+        const response = await fetch("/.netlify/functions/runtime-config", {
+          headers: { accept: "application/json" },
+        });
+        const data = await response.json();
+        googleClientId = data.googleClientId || "";
+        if (!googleClientId) {
+          setStatus("Missing GOOGLE_CLIENT_ID in Netlify environment.", "error");
+          signInBtn.disabled = true;
+          return;
+        }
+        setStatus("Configuration loaded. Sign in to enable event creation.", "");
+      }
+
+      function initGoogleAuth() {
+        if (!window.google || !googleClientId) {
+          return;
+        }
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: "https://www.googleapis.com/auth/calendar.events",
+          callback: (response) => {
+            if (response && response.access_token) {
+              accessToken = response.access_token;
+              updateAuthUi();
+              loadCalendars()
+                .then(() => {
+                  setStatus("Google access granted. You can now create events.", "ok");
+                })
+                .catch((error) => {
+                  setStatus(`Signed in, but failed to load calendars: ${error.message}`, "error");
+                });
+            }
+          },
+        });
+      }
+
+      signInBtn.addEventListener("click", () => {
+        if (!tokenClient) {
+          setStatus("Google auth is not ready yet.", "error");
+          return;
+        }
+        tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+      });
+
+      signOutBtn.addEventListener("click", () => {
+        if (accessToken && window.google && google.accounts && google.accounts.oauth2) {
+          google.accounts.oauth2.revoke(accessToken, () => {});
+        }
+        accessToken = "";
+        populateCalendars([]);
+        updateAuthUi();
+        setStatus("Google access revoked for this page session.", "");
+      });
+
+      formatBtn.addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(payloadEl.value);
+          payloadEl.value = JSON.stringify(parsed, null, 2);
+          setStatus("JSON formatted.", "ok");
+        } catch (error) {
+          setStatus(`Cannot format JSON: ${error.message}`, "error");
+        }
+      });
+
+      createBtn.addEventListener("click", async () => {
+        if (!accessToken) {
+          setStatus("Sign in with Google before creating events.", "error");
+          return;
+        }
+        setStatus("Creating events…", "");
+        createBtn.disabled = true;
+        try {
+          const url = new URL("/.netlify/functions/create-events", window.location.origin);
+          url.searchParams.set("calendarId", selectedCalendarId());
+          const response = await fetch(url.toString(), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${accessToken}`,
+            },
+            body: payloadEl.value,
+          });
+          const data = await response.json();
+          payloadEl.value = payloadEl.value.trim();
+          if (!response.ok) {
+            setStatus(JSON.stringify(data, null, 2), "error");
+            return;
+          }
+          setStatus(JSON.stringify(data, null, 2), "ok");
+        } catch (error) {
+          setStatus(`Request failed: ${error.message}`, "error");
+        } finally {
+          createBtn.disabled = !accessToken;
+        }
+      });
+
+      async function boot() {
+        decodePayloadFromUrl();
+        populateCalendars([]);
+        updateAuthUi();
+        try {
+          await loadConfig();
+        } catch (error) {
+          setStatus(`Failed to load runtime config: ${error.message}`, "error");
+          signInBtn.disabled = true;
+          return;
+        }
+        const waitForGoogle = window.setInterval(() => {
+          if (window.google) {
+            window.clearInterval(waitForGoogle);
+            initGoogleAuth();
+          }
+        }, 100);
+      }
+
+      boot();
+    </script>
+  </body>
+</html>
