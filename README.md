@@ -129,10 +129,12 @@ This repo is configured for Netlify:
 
 ## Usage Flow
 
+
+> Note: `payload64` must be encoded as `deflate-raw+base64url`; plain `deflate` is not accepted by the current decoder implementation.
 1. Open `/import`.
 2. Sign in with Google.
 3. Select a target calendar.
-4. Paste payload JSON (or pass it via `?payload64=...` URL query).
+4. Paste payload JSON (or pass it via `?payload64=...` URL query encoded as `deflate-raw+base64url`).
 5. Click **Create Events**.
 6. Review created vs skipped events in status output.
 
