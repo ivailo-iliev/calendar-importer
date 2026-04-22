@@ -211,6 +211,11 @@
       const authStateEl = document.getElementById("auth-state");
       const calendarSelectEl = document.getElementById("calendar-select");
 
+      const GOOGLE_SCOPES = [
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+      ].join(" ");
+
       let accessToken = "";
       let tokenClient = null;
       let googleClientId = "";
@@ -321,7 +326,7 @@
         }
         tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
-          scope: "https://www.googleapis.com/auth/calendar.events",
+          scope: GOOGLE_SCOPES,
           callback: (response) => {
             if (response && response.access_token) {
               accessToken = response.access_token;
@@ -331,7 +336,7 @@
                   setStatus("Google access granted. You can now create events.", "ok");
                 })
                 .catch((error) => {
-                  setStatus(`Signed in, but failed to load calendars: ${error.message}`, "error");
+                  setStatus(`Signed in, but failed to load calendars: ${error.message}. Try signing out and signing in again to refresh consent.`, "error");
                 });
             }
           },
