@@ -173,7 +173,7 @@
       <section class="panel">
         <div class="header">
           <h1>Schedule Import</h1>
-          <p>Paste or load compact JSON, sign in with Google, then create calendar events.</p>
+          <p>Paste or load expanded JSON, sign in with Google, then create calendar events.</p>
         </div>
         <div class="controls">
           <button id="auth-action" type="button">Sign In With Google</button>
@@ -182,7 +182,7 @@
         </div>
         <div class="meta">
           <div id="auth-state">Google: not connected</div>
-          <div>Required timezone: <code>Europe/Sofia</code></div>
+          <div>Default timezone: <code>Europe/Sofia</code></div>
         </div>
         <div class="selector-row">
           <label for="calendar-select">Target calendar</label>
@@ -195,7 +195,7 @@
           <textarea id="payload" spellcheck="false"></textarea>
         </div>
         <div class="hint">
-          URL shape: <code>/import?payload=%7B...%7D</code>
+          URL shape: <code>/import?payload64=&lt;deflate+base64url&gt;</code>
         </div>
       </section>
     </main>
@@ -321,6 +321,78 @@
         statusEl.textContent = message;
       }
 
+      function toCompactPayload(parsed) {
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Payload must be a JSON object.");
+        }
+
+        if (Array.isArray(parsed.ev)) {
+          return parsed;
+        }
+
+        if (!Array.isArray(parsed.events)) {
+          throw new Error("Expanded payload must include an events array.");
+        }
+
+        const timezone = typeof parsed.timezone === "string" && parsed.timezone.trim()
+          ? parsed.timezone.trim()
+          : "Europe/Sofia";
+        const ev = parsed.events.map((event, index) => {
+          if (!event || typeof event !== "object" || Array.isArray(event)) {
+            throw new Error(`events[${index}] must be an object.`);
+          }
+          const allDay = event.allDay === true;
+          return {
+            d: event.date,
+            ...(allDay ? { ad: true } : { s: event.start, e: event.end }),
+            t: event.title,
+          };
+        });
+        return { tz: timezone, ev };
+      }
+
+      function toExpandedPayload(parsed) {
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Payload must be a JSON object.");
+        }
+        if (!Array.isArray(parsed.ev)) {
+          if (Array.isArray(parsed.events)) {
+            return parsed;
+          }
+          throw new Error("Payload must include an ev array.");
+        }
+        return {
+          timezone: typeof parsed.tz === "string" && parsed.tz.trim() ? parsed.tz.trim() : "Europe/Sofia",
+          events: parsed.ev.map((event = {}) => ({
+            date: event.d,
+            ...(event.ad ? { allDay: true } : { start: event.s, end: event.e }),
+            title: event.t,
+          })),
+        };
+      }
+
+      function base64UrlToUint8(base64Url) {
+        const padded = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const padLength = (4 - (padded.length % 4)) % 4;
+        const base64 = padded + "=".repeat(padLength);
+        const binary = window.atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      async function inflateRawToString(compressedBytes) {
+        if (typeof DecompressionStream !== "function") {
+          throw new Error("This browser does not support DecompressionStream.");
+        }
+        const ds = new DecompressionStream("deflate-raw");
+        const stream = new Blob([compressedBytes]).stream().pipeThrough(ds);
+        const response = new Response(stream);
+        return response.text();
+      }
+
       function updateAuthUi() {
         const connected = Boolean(accessToken);
         authStateEl.textContent = connected ? "Google: connected" : "Google: not connected";
@@ -351,21 +423,24 @@
         populateCalendars(data.calendars || []);
       }
 
-      function decodePayloadFromUrl() {
+      async function decodePayloadFromUrl() {
         const params = new URLSearchParams(window.location.search);
-        const raw = params.get("payload");
+        const raw = params.get("payload64");
         if (!raw) {
-          payloadEl.value = '{\n  "tz": "Europe/Sofia",\n  "ev": []\n}';
-          setStatus("No payload parameter found. Paste JSON or reopen with ?payload=...", "");
+          payloadEl.value = '{\n  "timezone": "Europe/Sofia",\n  "events": []\n}';
+          setStatus("No payload64 parameter found. Paste JSON or reopen with ?payload64=...", "");
           return;
         }
         try {
-          const parsed = JSON.parse(raw);
-          payloadEl.value = JSON.stringify(parsed, null, 2);
-          setStatus("Loaded JSON payload from URL.", "ok");
+          const compressed = base64UrlToUint8(raw);
+          const minifiedJson = await inflateRawToString(compressed);
+          const parsed = JSON.parse(minifiedJson);
+          const expanded = toExpandedPayload(parsed);
+          payloadEl.value = JSON.stringify(expanded, null, 2);
+          setStatus("Loaded and expanded payload64 from URL.", "ok");
         } catch (error) {
           payloadEl.value = raw;
-          setStatus("Payload parameter is not valid JSON. You can correct it manually.", "error");
+          setStatus("payload64 is not valid deflate+base64url JSON. You can correct it manually.", "error");
         }
       }
 
@@ -457,7 +532,8 @@
       formatBtn.addEventListener("click", () => {
         try {
           const parsed = JSON.parse(payloadEl.value);
-          payloadEl.value = JSON.stringify(parsed, null, 2);
+          const expanded = toExpandedPayload(toCompactPayload(parsed));
+          payloadEl.value = JSON.stringify(expanded, null, 2);
           setStatus("JSON formatted.", "ok");
         } catch (error) {
           setStatus(`Cannot format JSON: ${error.message}`, "error");
@@ -472,6 +548,10 @@
         setStatus("Creating events…", "");
         createBtn.disabled = true;
         try {
+          const parsed = JSON.parse(payloadEl.value);
+          const compactPayload = toCompactPayload(parsed);
+          const compactPayloadJson = JSON.stringify(compactPayload);
+          payloadEl.value = JSON.stringify(toExpandedPayload(compactPayload), null, 2);
           const url = new URL("/.netlify/functions/create-events", window.location.origin);
           url.searchParams.set("calendarId", selectedCalendarId());
           const response = await fetch(url.toString(), {
@@ -480,7 +560,7 @@
               "content-type": "application/json",
               authorization: `Bearer ${accessToken}`,
             },
-            body: payloadEl.value,
+            body: compactPayloadJson,
           });
           const data = await response.json();
           payloadEl.value = payloadEl.value.trim();
@@ -497,7 +577,7 @@
       });
 
       async function boot() {
-        decodePayloadFromUrl();
+        await decodePayloadFromUrl();
         accessToken = restoreAccessTokenFromStorage();
         populateCalendars([]);
         updateAuthUi();

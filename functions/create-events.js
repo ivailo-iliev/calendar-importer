@@ -1,7 +1,7 @@
 "use strict";
 
 const { google } = require("googleapis");
-const { parsePayload, validatePayload, TIME_ZONE } = require("./_lib/schema");
+const { parsePayload, validatePayload } = require("./_lib/schema");
 
 function json(statusCode, body) {
   return {
@@ -21,32 +21,41 @@ function resolveCalendarId(event) {
 }
 
 function payloadEventKey(item) {
+  if (item.ad) {
+    return [item.d, "all-day", "", item.t].join("|");
+  }
   return [item.d, item.s, item.e, item.t].join("|");
 }
 
-function formatDateInZone(dateTime) {
+function formatDateInZone(dateTime, timeZone) {
   return new Intl.DateTimeFormat("sv-SE", {
-    timeZone: TIME_ZONE,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(dateTime);
 }
 
-function formatTimeInZone(dateTime) {
+function formatTimeInZone(dateTime, timeZone) {
   return new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIME_ZONE,
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(dateTime);
 }
 
-function calendarEventKey(event) {
+function calendarEventKey(event, timeZone) {
   if (!event || typeof event.summary !== "string") {
     return null;
   }
-  if (!event.start || !event.end || !event.start.dateTime || !event.end.dateTime) {
+  if (!event.start || !event.end) {
+    return null;
+  }
+  if (event.start.date && event.end.date) {
+    return [event.start.date, "all-day", "", event.summary].join("|");
+  }
+  if (!event.start.dateTime || !event.end.dateTime) {
     return null;
   }
   const start = new Date(event.start.dateTime);
@@ -55,20 +64,26 @@ function calendarEventKey(event) {
     return null;
   }
   return [
-    formatDateInZone(start),
-    formatTimeInZone(start),
-    formatTimeInZone(end),
+    formatDateInZone(start, timeZone),
+    formatTimeInZone(start, timeZone),
+    formatTimeInZone(end, timeZone),
     event.summary,
   ].join("|");
 }
 
-async function loadExistingEventKeys(calendar, calendarId, events) {
+function nextDate(dateStr) {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+async function loadExistingEventKeys(calendar, calendarId, events, timeZone) {
   if (!events.length) {
     return new Set();
   }
   const dates = events.map((item) => item.d).sort();
-  const timeMin = `${dates[0]}T00:00:00+03:00`;
-  const timeMax = `${dates[dates.length - 1]}T23:59:59+03:00`;
+  const timeMin = `${dates[0]}T00:00:00Z`;
+  const timeMax = `${nextDate(dates[dates.length - 1])}T00:00:00Z`;
   const keys = new Set();
   let pageToken = undefined;
 
@@ -83,7 +98,7 @@ async function loadExistingEventKeys(calendar, calendarId, events) {
       pageToken,
     });
     for (const event of response.data.items || []) {
-      const key = calendarEventKey(event);
+      const key = calendarEventKey(event, timeZone);
       if (key) {
         keys.add(key);
       }
@@ -122,7 +137,7 @@ exports.handler = async function handler(event) {
     auth.setCredentials({ access_token: accessToken });
     const calendar = google.calendar({ version: "v3", auth });
     const calendarId = resolveCalendarId(event);
-    const existingKeys = await loadExistingEventKeys(calendar, calendarId, normalized.ev);
+    const existingKeys = await loadExistingEventKeys(calendar, calendarId, normalized.ev, normalized.tz);
 
     const results = [];
     for (const item of normalized.ev) {
@@ -143,14 +158,18 @@ exports.handler = async function handler(event) {
         calendarId,
         requestBody: {
           summary: item.t,
-          start: {
-            dateTime: `${item.d}T${item.s}:00`,
-            timeZone: TIME_ZONE,
-          },
-          end: {
-            dateTime: `${item.d}T${item.e}:00`,
-            timeZone: TIME_ZONE,
-          },
+          start: item.ad
+            ? { date: item.d }
+            : {
+                dateTime: `${item.d}T${item.s}:00`,
+                timeZone: normalized.tz,
+              },
+          end: item.ad
+            ? { date: nextDate(item.d) }
+            : {
+                dateTime: `${item.d}T${item.e}:00`,
+                timeZone: normalized.tz,
+              },
         },
       });
 
