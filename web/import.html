@@ -6,15 +6,15 @@
     <title>Schedule Import</title>
     <style>
       :root {
-        --bg: #f3efe6;
-        --panel: #fffaf2;
-        --ink: #1f1d1a;
-        --muted: #655d54;
-        --line: #d8cfc1;
-        --accent: #176b87;
-        --accent-2: #b85c38;
-        --ok: #2f6f3e;
-        --err: #9d2a2a;
+        color-scheme: light dark;
+        --bg: Canvas;
+        --panel: Canvas;
+        --ink: CanvasText;
+        --muted: GrayText;
+        --line: ButtonBorder;
+        --accent: LinkText;
+        --ok: CanvasText;
+        --err: CanvasText;
       }
 
       * {
@@ -23,68 +23,64 @@
 
       body {
         margin: 0;
-        font-family: Georgia, "Times New Roman", serif;
+        font-family: sans-serif;
         color: var(--ink);
-        background:
-          radial-gradient(circle at top left, rgba(184, 92, 56, 0.12), transparent 32%),
-          linear-gradient(180deg, #efe7da 0%, var(--bg) 100%);
+        background: var(--bg);
       }
 
       main {
-        max-width: 920px;
+        max-width: 57.5rem;
         margin: 0 auto;
-        padding: 24px 16px 40px;
+        padding: 1.5rem 1rem 2.5rem;
       }
 
       .panel {
         background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        box-shadow: 0 16px 40px rgba(49, 43, 35, 0.08);
+        border: 0.0625rem solid var(--line);
+        border-radius: 1rem;
+        box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.08);
         overflow: hidden;
       }
 
       .header {
-        padding: 20px 22px 14px;
-        border-bottom: 1px solid var(--line);
+        padding: 1.25rem 1.375rem 0.875rem;
+        border-bottom: 0.0625rem solid var(--line);
       }
 
       h1 {
         margin: 0;
-        font-size: 30px;
+        font-size: 1.875rem;
         line-height: 1.1;
       }
 
       p {
-        margin: 8px 0 0;
+        margin: 0.5rem 0 0;
         color: var(--muted);
-      }
-
-      .header a {
-        color: var(--accent);
       }
 
       .controls {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        padding: 16px 22px 0;
+        gap: 0.625rem;
+        align-items: end;
+        padding: 1rem 1.375rem 0;
       }
 
       button {
         appearance: none;
         border: 0;
         border-radius: 999px;
-        padding: 11px 16px;
+        padding: 0.6875rem 1rem;
         font: inherit;
         cursor: pointer;
         background: var(--accent);
-        color: #fff;
+        color: Canvas;
       }
 
       button.secondary {
-        background: #ebe2d3;
+        background: ButtonFace;
         color: var(--ink);
+        border: 0.0625rem solid var(--line);
       }
 
       button[disabled] {
@@ -92,82 +88,98 @@
         cursor: not-allowed;
       }
 
-      .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 14px 22px 0;
-        color: var(--muted);
-        font-size: 14px;
-      }
-
-      .selector-row {
-        padding: 14px 22px 0;
+      .calendar-picker {
+        flex: 1 1 15rem;
+        min-width: 13.75rem;
       }
 
       label {
         display: block;
-        margin-bottom: 6px;
+        margin-bottom: 0.375rem;
         color: var(--muted);
-        font-size: 14px;
+        font-size: 0.875rem;
       }
 
       select {
         width: 100%;
-        max-width: 420px;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 10px 12px;
+        border: 0.0625rem solid var(--line);
+        border-radius: 0.75rem;
+        padding: 0.625rem 0.75rem;
         font: inherit;
         color: var(--ink);
-        background: #fffdf8;
+        background: Field;
       }
 
       .status {
-        margin: 16px 22px 0;
-        padding: 12px 14px;
-        border-radius: 12px;
-        background: #f4ecdf;
-        border: 1px solid var(--line);
+        margin: 1rem 1.375rem 0;
+        padding: 0.75rem 0.875rem;
+        border-radius: 0.75rem;
+        background: Field;
+        border: 0.0625rem solid var(--line);
         white-space: pre-wrap;
       }
 
       .status.ok {
-        border-color: rgba(47, 111, 62, 0.25);
+        border-color: Highlight;
         color: var(--ok);
-        background: rgba(47, 111, 62, 0.08);
+        background: Canvas;
       }
 
       .status.error {
-        border-color: rgba(157, 42, 42, 0.25);
+        border-color: LinkText;
         color: var(--err);
-        background: rgba(157, 42, 42, 0.08);
+        background: Canvas;
       }
 
       .grid {
-        padding: 16px 22px 22px;
+        padding: 1rem 1.375rem 1.375rem;
+      }
+
+      .editor {
+        position: relative;
+      }
+
+      .format-overlay {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        z-index: 1;
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.75rem;
+        background: ButtonFace;
+        color: var(--ink);
+        box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.08);
       }
 
       textarea {
         width: 100%;
-        min-height: 420px;
+        min-height: 26.25rem;
         resize: vertical;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 16px;
-        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        border: 0.0625rem solid var(--line);
+        border-radius: 0.875rem;
+        padding: 3.75rem 1rem 1rem;
+        font: 0.875rem/1.5 monospace;
         color: var(--ink);
-        background: #fffdf8;
+        background: Field;
       }
 
-      .hint {
-        padding: 0 22px 22px;
-        font-size: 14px;
+      .footer {
+        padding: 0 1.375rem 1.375rem;
+        font-size: 0.875rem;
         color: var(--muted);
       }
 
+      .footer a {
+        color: var(--accent);
+      }
+
       code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-family: monospace;
       }
     </style>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -178,29 +190,32 @@
         <div class="header">
           <h1>Schedule Import</h1>
           <p>Paste or load expanded JSON, sign in with Google, then create calendar events.</p>
-          <p><a href="https://github.com/ivailo-iliev/practice-calendar" target="_blank" rel="noreferrer">View source on GitHub</a></p>
         </div>
         <div class="controls">
-          <button id="auth-action" type="button">Sign In With Google</button>
-          <button id="format-json" type="button" class="secondary">Format JSON</button>
+          <button id="auth-action" type="button">Connect</button>
+          <div class="calendar-picker">
+            <label for="calendar-select">Target calendar</label>
+            <select id="calendar-select" disabled>
+              <option value="primary">Primary</option>
+            </select>
+          </div>
           <button id="create-events" type="button" disabled>Create Events</button>
-        </div>
-        <div class="meta">
-          <div id="auth-state">Google: not connected</div>
-          <div>Default timezone: <code>Europe/Sofia</code></div>
-        </div>
-        <div class="selector-row">
-          <label for="calendar-select">Target calendar</label>
-          <select id="calendar-select" disabled>
-            <option value="primary">Primary</option>
-          </select>
         </div>
         <div id="status" class="status">Loading configuration…</div>
         <div class="grid">
-          <textarea id="payload" spellcheck="false"></textarea>
+          <div class="editor">
+            <button
+              id="format-json"
+              type="button"
+              class="format-overlay secondary"
+              aria-label="Format JSON"
+              title="Format JSON"
+            >✨</button>
+            <textarea id="payload" spellcheck="false"></textarea>
+          </div>
         </div>
-        <div class="hint">
-          URL shape: <code>/import?payload64=&lt;deflate-raw+base64url&gt;</code>
+        <div class="footer">
+          <a href="https://github.com/ivailo-iliev/practice-calendar" target="_blank" rel="noreferrer">View source on GitHub</a>
         </div>
       </section>
     </main>
@@ -211,7 +226,6 @@
       const authActionBtn = document.getElementById("auth-action");
       const formatBtn = document.getElementById("format-json");
       const createBtn = document.getElementById("create-events");
-      const authStateEl = document.getElementById("auth-state");
       const calendarSelectEl = document.getElementById("calendar-select");
 
       const GOOGLE_SCOPES = [
@@ -478,14 +492,13 @@
 
       function updateAuthUi() {
         const connected = Boolean(accessToken);
-        authStateEl.textContent = connected ? "Google: connected" : "Google: not connected";
         authActionBtn.disabled = authInProgress || googleAuthUnavailable;
         if (authInProgress) {
           authActionBtn.textContent = connected ? "Signing Out…" : "Signing In…";
         } else if (googleAuthUnavailable) {
           authActionBtn.textContent = "Google Auth Unavailable";
         } else {
-          authActionBtn.textContent = connected ? "Sign Out" : "Sign In With Google";
+          authActionBtn.textContent = connected ? "Sign Out" : "Connect";
         }
         authActionBtn.classList.toggle("secondary", connected);
         createBtn.disabled = googleAuthUnavailable || !connected || authInProgress;

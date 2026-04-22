@@ -15,7 +15,8 @@ It includes:
 - `functions/list-calendars.js` — Lists Google calendars available to the signed-in user.
 - `functions/create-events.js` — Validates payload and inserts events into Google Calendar, skipping duplicates.
 - `functions/_lib/schema.js` — Validation and normalization rules for schedule payloads.
-- `chatgpt-project/schedule.schema.json` — Schema used when generating schedule JSON.
+- `chatgpt-project/schedule.expanded.schema.json` — Expanded schema for the editor-facing JSON returned by ChatGPT.
+- `chatgpt-project/schedule.compact.schema.json` — Compact schema for the encoded `payload64` URL contract.
 - `chatgpt-project/INSTRUCTIONS.md` — Prompting rules for schedule extraction.
 
 ## Prerequisites
@@ -65,6 +66,8 @@ Then open:
 ## Payload Formats
 
 The import UI accepts an expanded JSON shape in the editor and converts it to the compact backend contract before submission.
+
+The ChatGPT-facing schemas intentionally allow free-form titles. The preferred schedule-title dictionary and any exclusions such as non-event labels are defined in `chatgpt-project/INSTRUCTIONS.md`, not enforced in the JSON Schema files.
 
 Expanded JSON shape accepted by the UI:
 
@@ -138,7 +141,8 @@ The following compact payload samples are canonical and copy-paste valid:
 
 To prevent schema drift, any contract update must modify these files in the **same commit**:
 
-- `chatgpt-project/schedule.schema.json`
+- `chatgpt-project/schedule.expanded.schema.json`
+- `chatgpt-project/schedule.compact.schema.json`
 - `chatgpt-project/INSTRUCTIONS.md`
 - `functions/_lib/schema.js`
 - `web/import.html`

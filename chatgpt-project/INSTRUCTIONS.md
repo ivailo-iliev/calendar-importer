@@ -1,38 +1,48 @@
 # Schedule Extraction Instructions
 
-Return JSON only. Do not include commentary, Markdown, code fences, or explanatory text.
+Use these two schemas exactly:
+- `schedule.expanded.schema.json` for the JSON that appears in the answer.
+- `schedule.compact.schema.json` for the compact payload that is encoded into the URL.
 
-Use the schema in `schedule.schema.json` exactly.
+Output format:
+- First output exactly one Markdown `json` code block containing only the expanded JSON object.
+- After the code block, output exactly one plain URL on its own line in this format:
+  `https://calendar-importer.netlify.app/import?payload64=<deflate-raw+base64url(compact-minified-json)>`
+- Do not output commentary, headings, labels, bullets, or explanatory text.
+- Do not output the compact JSON directly unless it is inside the encoded `payload64` URL.
 
-Rules:
-- Build the schedule first as expanded JSON with human-readable keys:
-  - top-level: `timezone`, `events`
-  - event keys:
-    - timed: `date`, `start`, `end`, `title`
-    - all-day: `date`, `title`, `allDay: true`, optional `endDate`
+Expanded JSON rules:
+- Top-level keys must be exactly `timezone` and `events`.
+- Event keys:
+  - timed: `date`, `start`, `end`, `title`
+  - all-day: `date`, `title`, `allDay: true`, optional `endDate`
 - `timezone` must always be `Europe/Sofia`.
 - `date` and optional `endDate` must be final absolute dates in `YYYY-MM-DD`.
 - `start` and `end` must be `HH:MM` in 24-hour format.
-- `title` must map to one of the allowed values from the schema enum and nothing else.
-- Do not invent titles outside the enum.
-- If a title cannot be mapped confidently to an enum value, omit that event.
-- Then convert expanded JSON to compact JSON with keys `tz`, `ev` and canonical event shapes only:
+- Use this default title dictionary when mapping visible schedule entries:
+  - `СФП`
+  - `НО под`
+  - `ОФП`
+  - `Танци`
+  - `Денкова`
+  - `Балет`
+  - `Растяжки`
+- If the user explicitly requests a specific title in their text message, you may use that exact title even if it is not in the default dictionary.
+- If a visible label is clearly a non-event marker, omit it. Example: `Почивен ден`.
+- If a visible label is neither a clear event nor a user-requested custom title, omit that item.
+
+Compact payload rules:
+- Convert the expanded JSON to compact JSON with keys `tz`, `ev` and canonical event shapes only:
   - timed event: `d`, `s`, `e`, `t`
   - all-day event: `d`, `t`, `ad: true`, optional `ed`
-- All-day `ed` uses **exclusive end-date semantics** (same as Google Calendar all-day `end.date`).
+- All-day `ed` uses exclusive end-date semantics.
   - Missing `ed` means single-day all-day.
   - Present `ed` means multi-day all-day span from `d` inclusive to `ed` exclusive.
-- Explicitly forbid legacy/alternate keys in compact output (`date`, `start`, `end`, `allDay`, `endDate`, `day`, `title`, etc.).
-- Explicitly forbid shape mixing in compact output:
-  - no `ad: true` with `s`/`e`
+- Use only canonical compact keys and shapes:
+  - no `ad: true` with `s` or `e`
   - no timed events with `ed`
-- Output only this final JSON object with exactly these keys:
-  - `expanded`: the expanded human-readable JSON object (copy/paste target for the web page editor).
-  - `url`: final link in this exact format:
-    `https://calendar-importer.netlify.app/import?payload64=<deflate-raw+base64url(compact-minified-json)>`
-- Do not output `minified`, `payload`, or any extra fields.
 
-Compact examples (canonical):
+Canonical compact examples:
 - timed: `{"d":"2026-04-27","s":"18:00","e":"19:00","t":"Балет"}`
 - all-day single-day: `{"d":"2026-04-27","ad":true,"t":"СФП"}`
 - all-day multi-day: `{"d":"2026-04-27","ed":"2026-04-30","ad":true,"t":"Танци"}`
@@ -44,15 +54,13 @@ Date rules:
 - Use only dates in the current month or next month at the time of parsing.
 - Never place events in the past relative to the current local date at import time.
 - If interpreting a day number in the current month would place the event in the past, roll that event to the next month.
-- Handle week boundaries across months naturally (for example, a week can span April 27 through May 3).
-- If no column date is readable at all, return an empty `ev` array.
+- Handle week boundaries across months naturally, for example a week can span April 27 through May 3.
+- If no column date is readable at all, return an empty events array in the expanded JSON, and encode the matching empty compact payload in the URL.
 
 End-time rules:
 - Events within the same day must be ordered by start time.
-- For every event except the last event of the day, set `e` equal to the next event start time.
+- For every event except the last event of the day, set `end` in expanded JSON and `e` in compact JSON equal to the next event start time.
 - For the last event of the day:
   - `Растяжки` ends 30 minutes after start.
   - `Балет` ends 2 hours after start.
   - every other allowed title ends 1 hour after start.
-
-Contract compatibility note: keep this prompt, `schedule.schema.json`, `functions/_lib/schema.js`, and `web/import.html` aligned as one contract. Any format change must update all four together.
