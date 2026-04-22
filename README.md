@@ -1,9 +1,9 @@
 # Practice Calendar Import
 
-A small Netlify app for importing compact schedule JSON into Google Calendar.
+A small Netlify app for importing schedule JSON into Google Calendar.
 
 It includes:
-- A browser UI at `/import` for Google sign-in and payload submission.
+- A browser UI at `/import` for Google sign-in, expanded JSON editing, and payload submission.
 - Netlify Functions for runtime config, calendar discovery, and event creation.
 - Payload validation for schema shape, event limits, and event time/all-day consistency.
 
@@ -44,6 +44,12 @@ export GOOGLE_CLIENT_ID="your-google-oauth-client-id"
 
 For Netlify, set `GOOGLE_CLIENT_ID` in your site environment variables.
 
+## Public Repository Notes
+
+- This repository is intended to be safe to clone publicly.
+- Keep secrets out of Git. In particular, do not commit `.env` files, OAuth secrets, refresh tokens, or captured access tokens.
+- `GOOGLE_CLIENT_ID` is required at runtime, but it should be configured in Netlify or your local shell, not committed to the repository.
+
 ## Running Locally
 
 Use Netlify Dev so static files and functions run together:
@@ -56,7 +62,30 @@ Then open:
 
 - `http://localhost:8888/import`
 
-## Canonical Compact Payload Contract
+## Payload Formats
+
+The import UI accepts an expanded JSON shape in the editor and converts it to the compact backend contract before submission.
+
+Expanded JSON shape accepted by the UI:
+
+```json
+{
+  "timezone": "Europe/Sofia",
+  "events": [
+    {
+      "date": "2026-04-27",
+      "start": "18:00",
+      "end": "19:00",
+      "title": "Балет"
+    },
+    {
+      "date": "2026-04-28",
+      "allDay": true,
+      "title": "СФП"
+    }
+  ]
+}
+```
 
 The backend expects a compact JSON object with:
 
@@ -153,9 +182,7 @@ Behavior:
 This repo is configured for Netlify:
 
 - Static publish directory: `web`
-- Functions directory: `netlify/functions` (as set in `netlify.toml`)
-
-> Note: if you deploy this exact repository, ensure your function source layout matches your build setup. If your functions are in `functions/`, either move/copy them to `netlify/functions` or update `netlify.toml` accordingly.
+- Functions directory: `functions`
 
 ## Usage Flow
 
@@ -163,7 +190,7 @@ This repo is configured for Netlify:
 1. Open `/import`.
 2. Sign in with Google.
 3. Select a target calendar.
-4. Paste payload JSON (or pass it via `?payload64=...` URL query encoded as `deflate-raw+base64url`).
+4. Paste expanded payload JSON into the editor, or pass compact JSON via `?payload64=...` encoded as `deflate-raw+base64url`.
 5. Click **Create Events**.
 6. Review created vs skipped events in status output.
 
