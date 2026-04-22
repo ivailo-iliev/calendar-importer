@@ -1,15 +1,6 @@
 "use strict";
 
 const TIME_ZONE = "Europe/Sofia";
-const ALLOWED_TITLES = Object.freeze([
-  "СФП",
-  "НО под",
-  "ОФП",
-  "Танци",
-  "Денкова",
-  "Балет",
-  "Растяжки",
-]);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -54,21 +45,16 @@ function parseTimeMinutes(value) {
   return hour * 60 + minute;
 }
 
-function minutesToTime(minutes) {
-  const normalized = ((minutes % 1440) + 1440) % 1440;
-  const hour = Math.floor(normalized / 60);
-  const minute = normalized % 60;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function defaultDurationMinutes(title) {
-  if (title === "Растяжки") {
-    return 30;
+function isValidTimeZone(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return false;
   }
-  if (title === "Балет") {
-    return 120;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch (error) {
+    return false;
   }
-  return 60;
 }
 
 function validatePayload(payload) {
@@ -83,8 +69,10 @@ function validatePayload(payload) {
       errors.push(`Unexpected top-level field: ${key}`);
     }
   }
-  if (payload.tz !== TIME_ZONE) {
-    errors.push(`tz must be ${TIME_ZONE}.`);
+  const hasTz = Object.prototype.hasOwnProperty.call(payload, "tz");
+  const normalizedTimeZone = hasTz ? String(payload.tz || "").trim() : TIME_ZONE;
+  if (hasTz && !isValidTimeZone(normalizedTimeZone)) {
+    errors.push("tz must be a valid IANA timezone.");
   }
   if (!Array.isArray(payload.ev)) {
     errors.push("ev must be an array.");
@@ -102,87 +90,65 @@ function validatePayload(payload) {
       return;
     }
     const eventKeys = Object.keys(event);
-    const allowedEventKeys = new Set(["d", "s", "e", "t"]);
+    const allowedEventKeys = new Set(["d", "s", "e", "t", "ad"]);
     for (const key of eventKeys) {
       if (!allowedEventKeys.has(key)) {
         errors.push(`ev[${index}] has unexpected field: ${key}`);
       }
     }
-    const { d, s, e, t } = event;
+    const { d, s, e, t, ad } = event;
     if (typeof d !== "string" || !parseDateParts(d)) {
       errors.push(`ev[${index}].d must be a valid ISO date.`);
     }
+    const isAllDay = ad === true;
     const startMinutes = typeof s === "string" ? parseTimeMinutes(s) : null;
     const endMinutes = typeof e === "string" ? parseTimeMinutes(e) : null;
-    if (startMinutes === null) {
-      errors.push(`ev[${index}].s must be a valid HH:MM time.`);
+    if (typeof t !== "string" || t.trim().length < 2) {
+      errors.push(`ev[${index}].t must be a string with at least 2 characters.`);
     }
-    if (endMinutes === null) {
-      errors.push(`ev[${index}].e must be a valid HH:MM time.`);
+    if (isAllDay) {
+      if (typeof s !== "undefined" || typeof e !== "undefined") {
+        errors.push(`ev[${index}] all-day events must not include s or e.`);
+      }
+    } else {
+      if (startMinutes === null) {
+        errors.push(`ev[${index}].s must be a valid HH:MM time.`);
+      }
+      if (endMinutes === null) {
+        errors.push(`ev[${index}].e must be a valid HH:MM time.`);
+      }
+      if (startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes) {
+        errors.push(`ev[${index}] must end after it starts.`);
+      }
     }
-    if (typeof t !== "string" || !ALLOWED_TITLES.includes(t)) {
-      errors.push(`ev[${index}].t must be one of the allowed titles.`);
-    }
-    if (startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes) {
-      errors.push(`ev[${index}] must end after it starts.`);
-    }
-    const dedupeKey = [d, s, e, t].join("|");
-    if (d && s && e && t) {
+    const normalizedTitle = typeof t === "string" ? t.trim() : t;
+    const dedupeKey = [d, isAllDay ? "all-day" : s, isAllDay ? "" : e, normalizedTitle].join("|");
+    if (d && normalizedTitle && (isAllDay || (s && e))) {
       if (seenPayloadKeys.has(dedupeKey)) {
         errors.push(`ev[${index}] duplicates another event in the payload.`);
       } else {
         seenPayloadKeys.add(dedupeKey);
       }
     }
-    normalized.push({ d, s, e, t, _startMinutes: startMinutes, _endMinutes: endMinutes });
+    normalized.push(
+      isAllDay
+        ? { d, t: normalizedTitle, ad: true }
+        : { d, s, e, t: normalizedTitle }
+    );
   });
-
-  const byDate = new Map();
-  normalized.forEach((event, index) => {
-    if (!event.d || event._startMinutes === null || event._endMinutes === null || !event.t) {
-      return;
-    }
-    if (!byDate.has(event.d)) {
-      byDate.set(event.d, []);
-    }
-    byDate.get(event.d).push({ ...event, _index: index });
-  });
-
-  for (const [date, events] of byDate.entries()) {
-    events.sort((a, b) => a._startMinutes - b._startMinutes);
-    for (let i = 0; i < events.length; i += 1) {
-      const current = events[i];
-      const expectedEnd =
-        i + 1 < events.length
-          ? events[i + 1]._startMinutes
-          : current._startMinutes + defaultDurationMinutes(current.t);
-      if (current._endMinutes !== expectedEnd) {
-        const label = i + 1 < events.length ? minutesToTime(expectedEnd) : minutesToTime(expectedEnd);
-        errors.push(
-          `ev[${current._index}].e must be ${label} according to the end-time rules for ${date}.`
-        );
-      }
-      if (i + 1 < events.length && current._endMinutes !== events[i + 1]._startMinutes) {
-        errors.push(
-          `ev[${current._index}].e must equal the next event start time on ${date}.`
-        );
-      }
-    }
-  }
 
   return {
     errors,
     normalized: errors.length
       ? null
       : {
-          tz: TIME_ZONE,
-          ev: normalized.map(({ d, s, e, t }) => ({ d, s, e, t })),
+          tz: isValidTimeZone(normalizedTimeZone) ? normalizedTimeZone : TIME_ZONE,
+          ev: normalized,
         },
   };
 }
 
 module.exports = {
-  ALLOWED_TITLES,
   TIME_ZONE,
   parsePayload,
   validatePayload,

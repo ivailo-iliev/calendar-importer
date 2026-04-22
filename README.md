@@ -5,7 +5,7 @@ A small Netlify app for importing compact schedule JSON into Google Calendar.
 It includes:
 - A browser UI at `/import` for Google sign-in and payload submission.
 - Netlify Functions for runtime config, calendar discovery, and event creation.
-- Strict payload validation (timezone, schema shape, allowed titles, and end-time rules).
+- Payload validation for schema shape, event limits, and event time consistency.
 
 ## Project Structure
 
@@ -58,31 +58,31 @@ Then open:
 
 ## Payload Format
 
-The app expects a JSON object with:
+The backend expects a compact JSON object with:
 
-- `tz`: must be `Europe/Sofia`
-- `ev`: array of events
+- `tz`: optional IANA timezone string (defaults to `Europe/Sofia`)
+- `ev`: array of events (max 35)
 
-Each event must contain:
+Timed event shape:
 
 - `d`: date in `YYYY-MM-DD`
 - `s`: start time in `HH:MM` (24-hour)
 - `e`: end time in `HH:MM` (24-hour)
-- `t`: one of allowed titles:
-  - `СФП`, `НО под`, `ОФП`, `Танци`, `Денкова`, `Балет`, `Растяжки`
+- `t`: title string (minimum 2 characters)
+
+All-day event shape:
+
+- `d`: date in `YYYY-MM-DD`
+- `ad`: `true`
+- `t`: title string (minimum 2 characters)
 
 Additional validation rules are enforced in `functions/_lib/schema.js`:
 
 - No unexpected top-level or event fields.
 - Maximum of 35 events.
-- No duplicate events with identical `d|s|e|t`.
-- Events must end after start.
-- For each day, events are ordered by start time and:
-  - every event except the last must end at the next event start;
-  - the last event duration defaults to:
-    - `Растяжки` → +30 min
-    - `Балет` → +120 min
-    - all others → +60 min
+- No duplicate events with identical normalized keys.
+- Timed events must satisfy `start < end`.
+- All-day events must not include `s` or `e`.
 
 ## API Endpoints
 
@@ -132,7 +132,7 @@ This repo is configured for Netlify:
 1. Open `/import`.
 2. Sign in with Google.
 3. Select a target calendar.
-4. Paste payload JSON (or pass it via `?payload=...` URL query).
+4. Paste payload JSON (or pass it via `?payload64=...` URL query).
 5. Click **Create Events**.
 6. Review created vs skipped events in status output.
 
@@ -141,4 +141,3 @@ This repo is configured for Netlify:
 - Access tokens are provided by Google Identity Services in-browser.
 - Functions require Bearer tokens and forward requests to Google Calendar API.
 - Do not commit secrets (OAuth client secrets, API keys, or tokens) to the repo.
-
