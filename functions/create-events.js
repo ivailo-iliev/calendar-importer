@@ -22,7 +22,7 @@ function resolveCalendarId(event) {
 
 function payloadEventKey(item) {
   if (item.ad) {
-    return [item.d, "all-day", "", item.t].join("|");
+    return [item.d, item.ed || item.d, "all-day", item.t].join("|");
   }
   return [item.d, item.s, item.e, item.t].join("|");
 }
@@ -57,7 +57,7 @@ function calendarEventKey(event, timeZone) {
     return null;
   }
   if (event.start.date && event.end.date) {
-    return [event.start.date, "all-day", "", normalizedSummary].join("|");
+    return [event.start.date, event.end.date || event.start.date, "all-day", normalizedSummary].join("|");
   }
   if (!event.start.dateTime || !event.end.dateTime) {
     return null;
@@ -85,9 +85,10 @@ async function loadExistingEventKeys(calendar, calendarId, events, timeZone) {
   if (!events.length) {
     return new Set();
   }
-  const dates = events.map((item) => item.d).sort();
-  const timeMin = `${dates[0]}T00:00:00Z`;
-  const timeMax = `${nextDate(dates[dates.length - 1])}T00:00:00Z`;
+  const rangeStarts = events.map((item) => item.d);
+  const rangeEndsExclusive = events.map((item) => (item.ad ? item.ed || nextDate(item.d) : nextDate(item.d)));
+  const timeMin = `${rangeStarts.sort()[0]}T00:00:00Z`;
+  const timeMax = `${rangeEndsExclusive.sort().slice(-1)[0]}T00:00:00Z`;
   const keys = new Set();
   let pageToken = undefined;
 
@@ -149,8 +150,7 @@ exports.handler = async function handler(event) {
       if (existingKeys.has(key)) {
         results.push({
           d: item.d,
-          s: item.s,
-          e: item.e,
+          ...(item.ad ? { ad: true, ...(item.ed ? { ed: item.ed } : {}) } : { s: item.s, e: item.e }),
           t: item.t,
           skipped: true,
           reason: "duplicate",
@@ -169,7 +169,7 @@ exports.handler = async function handler(event) {
                 timeZone: normalized.tz,
               },
           end: item.ad
-            ? { date: nextDate(item.d) }
+            ? { date: item.ed || nextDate(item.d) }
             : {
                 dateTime: `${item.d}T${item.e}:00`,
                 timeZone: normalized.tz,
@@ -179,8 +179,7 @@ exports.handler = async function handler(event) {
 
       results.push({
         d: item.d,
-        s: item.s,
-        e: item.e,
+        ...(item.ad ? { ad: true, ...(item.ed ? { ed: item.ed } : {}) } : { s: item.s, e: item.e }),
         t: item.t,
         id: response.data.id || null,
         htmlLink: response.data.htmlLink || null,

@@ -45,11 +45,16 @@ function parseTimeMinutes(value) {
   return hour * 60 + minute;
 }
 
+function compareIsoDates(a, b) {
+  return a.localeCompare(b);
+}
+
 function validatePayload(payload) {
   const errors = [];
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { errors: ["Payload must be a JSON object."], normalized: null };
   }
+
   const keys = Object.keys(payload);
   const allowedKeys = new Set(["tz", "ev"]);
   for (const key of keys) {
@@ -76,6 +81,7 @@ function validatePayload(payload) {
 
   const normalized = [];
   const seenPayloadKeys = new Set();
+
   payload.ev.forEach((event, index) => {
     if (!event || typeof event !== "object" || Array.isArray(event)) {
       errors.push(`ev[${index}] must be an object.`);
@@ -83,20 +89,70 @@ function validatePayload(payload) {
     }
 
     const eventKeys = Object.keys(event);
+    const hasAllDay = event.ad === true;
+
+    if (hasAllDay) {
+      const allowedEventKeys = new Set(["d", "ed", "ad", "t"]);
+      for (const key of eventKeys) {
+        if (!allowedEventKeys.has(key)) {
+          errors.push(`ev[${index}] has unexpected field for all-day event: ${key}`);
+        }
+      }
+
+      const d = typeof event.d === "string" ? event.d.trim() : "";
+      const ed = typeof event.ed === "string" ? event.ed.trim() : undefined;
+      const t = typeof event.t === "string" ? event.t.trim() : "";
+
+      if (!d || !parseDateParts(d)) {
+        errors.push(`ev[${index}].d must be a valid ISO date.`);
+      }
+      if (Object.prototype.hasOwnProperty.call(event, "ed")) {
+        if (!ed || !parseDateParts(ed)) {
+          errors.push(`ev[${index}].ed must be a valid ISO date when provided.`);
+        } else if (d && parseDateParts(d) && compareIsoDates(ed, d) <= 0) {
+          errors.push(`ev[${index}].ed must be after d for all-day exclusive spans.`);
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(event, "s") || Object.prototype.hasOwnProperty.call(event, "e")) {
+        errors.push(`ev[${index}] all-day event cannot include s or e.`);
+      }
+
+      if (typeof event.t !== "string" || t.length < 2) {
+        errors.push(`ev[${index}].t must be a string with at least 2 characters.`);
+      }
+
+      const dedupeKey = [d, ed || d, "all-day", t].join("|");
+      if (d && t) {
+        if (seenPayloadKeys.has(dedupeKey)) {
+          errors.push(`ev[${index}] duplicates another event in the payload.`);
+        } else {
+          seenPayloadKeys.add(dedupeKey);
+        }
+      }
+
+      normalized.push(ed ? { d, ed, ad: true, t } : { d, ad: true, t });
+      return;
+    }
+
     const allowedEventKeys = new Set(["d", "s", "e", "t"]);
     for (const key of eventKeys) {
       if (!allowedEventKeys.has(key)) {
-        errors.push(`ev[${index}] has unexpected field: ${key}`);
+        errors.push(`ev[${index}] has unexpected field for timed event: ${key}`);
       }
     }
 
-    const { d, s, e, t } = event;
-    if (typeof d !== "string" || !parseDateParts(d)) {
+    const d = typeof event.d === "string" ? event.d.trim() : "";
+    const s = typeof event.s === "string" ? event.s.trim() : "";
+    const e = typeof event.e === "string" ? event.e.trim() : "";
+    const t = typeof event.t === "string" ? event.t.trim() : "";
+
+    if (!d || !parseDateParts(d)) {
       errors.push(`ev[${index}].d must be a valid ISO date.`);
     }
 
-    const startMinutes = typeof s === "string" ? parseTimeMinutes(s) : null;
-    const endMinutes = typeof e === "string" ? parseTimeMinutes(e) : null;
+    const startMinutes = parseTimeMinutes(s);
+    const endMinutes = parseTimeMinutes(e);
     if (startMinutes === null) {
       errors.push(`ev[${index}].s must be a valid HH:MM time.`);
     }
@@ -107,13 +163,12 @@ function validatePayload(payload) {
       errors.push(`ev[${index}] must end after it starts.`);
     }
 
-    if (typeof t !== "string" || t.trim().length < 2) {
+    if (typeof event.t !== "string" || t.length < 2) {
       errors.push(`ev[${index}].t must be a string with at least 2 characters.`);
     }
 
-    const normalizedTitle = typeof t === "string" ? t.trim() : t;
-    const dedupeKey = [d, s, e, normalizedTitle].join("|");
-    if (d && s && e && normalizedTitle) {
+    const dedupeKey = [d, s, e, t].join("|");
+    if (d && s && e && t) {
       if (seenPayloadKeys.has(dedupeKey)) {
         errors.push(`ev[${index}] duplicates another event in the payload.`);
       } else {
@@ -121,7 +176,7 @@ function validatePayload(payload) {
       }
     }
 
-    normalized.push({ d, s, e, t: normalizedTitle });
+    normalized.push({ d, s, e, t });
   });
 
   return {

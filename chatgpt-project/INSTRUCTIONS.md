@@ -7,19 +7,35 @@ Use the schema in `schedule.schema.json` exactly.
 Rules:
 - Build the schedule first as expanded JSON with human-readable keys:
   - top-level: `timezone`, `events`
-  - event keys: `date`, `start`, `end`, `title`
+  - event keys:
+    - timed: `date`, `start`, `end`, `title`
+    - all-day: `date`, `title`, `allDay: true`, optional `endDate`
 - `timezone` must always be `Europe/Sofia`.
-- `date` must be a final absolute date in `YYYY-MM-DD`.
+- `date` and optional `endDate` must be final absolute dates in `YYYY-MM-DD`.
 - `start` and `end` must be `HH:MM` in 24-hour format.
 - `title` must map to one of the allowed values from the schema enum and nothing else.
 - Do not invent titles outside the enum.
 - If a title cannot be mapped confidently to an enum value, omit that event.
-- Then convert the expanded JSON to compact JSON with keys `tz`, `ev`, and event keys `d`, `s`, `e`, `t` only for URL generation.
+- Then convert expanded JSON to compact JSON with keys `tz`, `ev` and canonical event shapes only:
+  - timed event: `d`, `s`, `e`, `t`
+  - all-day event: `d`, `t`, `ad: true`, optional `ed`
+- All-day `ed` uses **exclusive end-date semantics** (same as Google Calendar all-day `end.date`).
+  - Missing `ed` means single-day all-day.
+  - Present `ed` means multi-day all-day span from `d` inclusive to `ed` exclusive.
+- Explicitly forbid legacy/alternate keys in compact output (`date`, `start`, `end`, `allDay`, `endDate`, `day`, `title`, etc.).
+- Explicitly forbid shape mixing in compact output:
+  - no `ad: true` with `s`/`e`
+  - no timed events with `ed`
 - Output only this final JSON object with exactly these keys:
   - `expanded`: the expanded human-readable JSON object (copy/paste target for the web page editor).
   - `url`: final link in this exact format:
     `https://calendar-importer.netlify.app/import?payload64=<deflate-raw+base64url(compact-minified-json)>`
 - Do not output `minified`, `payload`, or any extra fields.
+
+Compact examples (canonical):
+- timed: `{"d":"2026-04-27","s":"18:00","e":"19:00","t":"Балет"}`
+- all-day single-day: `{"d":"2026-04-27","ad":true,"t":"СФП"}`
+- all-day multi-day: `{"d":"2026-04-27","ed":"2026-04-30","ad":true,"t":"Танци"}`
 
 Date rules:
 - The screenshot is a 7-column week view ordered left to right.
@@ -39,4 +55,4 @@ End-time rules:
   - `Балет` ends 2 hours after start.
   - every other allowed title ends 1 hour after start.
 
-Contract compatibility note: keep this prompt, `schedule.schema.json`, and `functions/_lib/schema.js` aligned as one contract. Any format change must update all three together.
+Contract compatibility note: keep this prompt, `schedule.schema.json`, `functions/_lib/schema.js`, and `web/import.html` aligned as one contract. Any format change must update all four together.

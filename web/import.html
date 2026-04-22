@@ -322,13 +322,68 @@
         statusEl.textContent = message;
       }
 
+      const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const TIME_RE = /^\d{2}:\d{2}$/;
+
+      function isValidDate(value) {
+        if (typeof value !== "string" || !DATE_RE.test(value)) return false;
+        const [year, month, day] = value.split("-").map(Number);
+        const date = new Date(Date.UTC(year, month - 1, day));
+        return (
+          date.getUTCFullYear() === year
+          && date.getUTCMonth() === month - 1
+          && date.getUTCDate() === day
+        );
+      }
+
+      function isValidTime(value) {
+        if (typeof value !== "string" || !TIME_RE.test(value)) return false;
+        const [hour, minute] = value.split(":").map(Number);
+        return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+      }
+
       function toCompactPayload(parsed) {
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
           throw new Error("Payload must be a JSON object.");
         }
 
         if (Array.isArray(parsed.ev)) {
-          return parsed;
+          const ev = parsed.ev.map((event, index) => {
+            if (!event || typeof event !== "object" || Array.isArray(event)) {
+              throw new Error(`ev[${index}] must be an object.`);
+            }
+            const allDay = event.ad === true;
+            if (allDay && (Object.prototype.hasOwnProperty.call(event, "s") || Object.prototype.hasOwnProperty.call(event, "e"))) {
+              throw new Error(`ev[${index}] cannot mix ad:true with s/e.`);
+            }
+            if (!allDay && Object.prototype.hasOwnProperty.call(event, "ed")) {
+              throw new Error(`ev[${index}] timed events cannot include ed.`);
+            }
+            if (!isValidDate(event.d)) {
+              throw new Error(`ev[${index}].d must be YYYY-MM-DD.`);
+            }
+            if (typeof event.t !== "string" || !event.t.trim()) {
+              throw new Error(`ev[${index}].t must be a non-empty string.`);
+            }
+            if (allDay) {
+              if (Object.prototype.hasOwnProperty.call(event, "ed")) {
+                if (!isValidDate(event.ed) || event.ed <= event.d) {
+                  throw new Error(`ev[${index}].ed must be a valid date after d (exclusive end).`);
+                }
+              }
+              return event.ed
+                ? { d: event.d, ed: event.ed, ad: true, t: event.t.trim() }
+                : { d: event.d, ad: true, t: event.t.trim() };
+            }
+            if (!isValidTime(event.s) || !isValidTime(event.e) || event.e <= event.s) {
+              throw new Error(`ev[${index}] timed events require valid s/e with s < e.`);
+            }
+            return { d: event.d, s: event.s, e: event.e, t: event.t.trim() };
+          });
+          return {
+            tz: typeof parsed.tz === "string" && parsed.tz.trim() ? parsed.tz.trim() : "Europe/Sofia",
+            ev,
+          };
         }
 
         if (!Array.isArray(parsed.events)) {
@@ -343,32 +398,54 @@
             throw new Error(`events[${index}] must be an object.`);
           }
           const allDay = event.allDay === true;
-          return {
-            d: event.date,
-            ...(allDay ? { ad: true } : { s: event.start, e: event.end }),
-            t: event.title,
-          };
+          if (!isValidDate(event.date)) {
+            throw new Error(`events[${index}].date must be YYYY-MM-DD.`);
+          }
+          if (typeof event.title !== "string" || !event.title.trim()) {
+            throw new Error(`events[${index}].title must be a non-empty string.`);
+          }
+          if (allDay) {
+            if (Object.prototype.hasOwnProperty.call(event, "start") || Object.prototype.hasOwnProperty.call(event, "end")) {
+              throw new Error(`events[${index}] cannot include start/end when allDay is true.`);
+            }
+            if (Object.prototype.hasOwnProperty.call(event, "endDate")) {
+              if (!isValidDate(event.endDate) || event.endDate <= event.date) {
+                throw new Error(`events[${index}].endDate must be after date (exclusive end).`);
+              }
+              return { d: event.date, ed: event.endDate, ad: true, t: event.title.trim() };
+            }
+            return { d: event.date, ad: true, t: event.title.trim() };
+          }
+          if (Object.prototype.hasOwnProperty.call(event, "endDate")) {
+            throw new Error(`events[${index}] timed events cannot include endDate.`);
+          }
+          if (!isValidTime(event.start) || !isValidTime(event.end) || event.end <= event.start) {
+            throw new Error(`events[${index}] timed events require valid start/end with start < end.`);
+          }
+          return { d: event.date, s: event.start, e: event.end, t: event.title.trim() };
         });
         return { tz: timezone, ev };
       }
 
       function toExpandedPayload(parsed) {
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          throw new Error("Payload must be a JSON object.");
-        }
-        if (!Array.isArray(parsed.ev)) {
-          if (Array.isArray(parsed.events)) {
-            return parsed;
-          }
-          throw new Error("Payload must include an ev array.");
-        }
+        const compact = toCompactPayload(parsed);
         return {
-          timezone: typeof parsed.tz === "string" && parsed.tz.trim() ? parsed.tz.trim() : "Europe/Sofia",
-          events: parsed.ev.map((event = {}) => ({
-            date: event.d,
-            ...(event.ad ? { allDay: true } : { start: event.s, end: event.e }),
-            title: event.t,
-          })),
+          timezone: compact.tz,
+          events: compact.ev.map((event) => (
+            event.ad
+              ? {
+                  date: event.d,
+                  allDay: true,
+                  ...(event.ed ? { endDate: event.ed } : {}),
+                  title: event.t,
+                }
+              : {
+                  date: event.d,
+                  start: event.s,
+                  end: event.e,
+                  title: event.t,
+                }
+          )),
         };
       }
 
