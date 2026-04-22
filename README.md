@@ -60,29 +60,33 @@ Then open:
 
 The backend expects a compact JSON object with:
 
-- `tz`: optional IANA timezone string (defaults to `Europe/Sofia`)
-- `ev`: array of events (max 35)
+- `tz`: required and must equal `Europe/Sofia`
+- `ev`: array of timed events (max 35)
 
-Timed event shape:
+Timed event shape (required fields):
 
 - `d`: date in `YYYY-MM-DD`
 - `s`: start time in `HH:MM` (24-hour)
 - `e`: end time in `HH:MM` (24-hour)
 - `t`: title string (minimum 2 characters)
 
-All-day event shape:
-
-- `d`: date in `YYYY-MM-DD`
-- `ad`: `true`
-- `t`: title string (minimum 2 characters)
-
 Additional validation rules are enforced in `functions/_lib/schema.js`:
 
 - No unexpected top-level or event fields.
 - Maximum of 35 events.
-- No duplicate events with identical normalized keys.
-- Timed events must satisfy `start < end`.
-- All-day events must not include `s` or `e`.
+- No duplicate events with identical `d|s|e|t` keys.
+- Timed events must satisfy `s < e`.
+- All-day event fields (for example `ad`) are rejected.
+
+### Contract compatibility
+
+To prevent drift, treat this as a single source-of-truth contract across **all three** layers:
+
+- prompt rules in `chatgpt-project/INSTRUCTIONS.md`
+- generation schema in `chatgpt-project/schedule.schema.json`
+- runtime validation in `functions/_lib/schema.js`
+
+If one changes, update the other two in the same commit.
 
 ## API Endpoints
 
