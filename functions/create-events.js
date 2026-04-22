@@ -49,11 +49,15 @@ function calendarEventKey(event, timeZone) {
   if (!event || typeof event.summary !== "string") {
     return null;
   }
+  const normalizedSummary = event.summary.trim();
+  if (!normalizedSummary) {
+    return null;
+  }
   if (!event.start || !event.end) {
     return null;
   }
   if (event.start.date && event.end.date) {
-    return [event.start.date, "all-day", "", event.summary].join("|");
+    return [event.start.date, "all-day", "", normalizedSummary].join("|");
   }
   if (!event.start.dateTime || !event.end.dateTime) {
     return null;
@@ -67,7 +71,7 @@ function calendarEventKey(event, timeZone) {
     formatDateInZone(start, timeZone),
     formatTimeInZone(start, timeZone),
     formatTimeInZone(end, timeZone),
-    event.summary,
+    normalizedSummary,
   ].join("|");
 }
 
