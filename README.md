@@ -5,7 +5,7 @@ A small Netlify app for importing compact schedule JSON into Google Calendar.
 It includes:
 - A browser UI at `/import` for Google sign-in and payload submission.
 - Netlify Functions for runtime config, calendar discovery, and event creation.
-- Payload validation for schema shape, event limits, and event time consistency.
+- Payload validation for schema shape, event limits, and event time/all-day consistency.
 
 ## Project Structure
 
@@ -56,37 +56,63 @@ Then open:
 
 - `http://localhost:8888/import`
 
-## Payload Format
+## Canonical Compact Payload Contract
 
 The backend expects a compact JSON object with:
 
 - `tz`: required and must equal `Europe/Sofia`
-- `ev`: array of timed events (max 35)
+- `ev`: array of events (max 35)
 
-Timed event shape (required fields):
+Exactly two canonical event types are accepted:
 
-- `d`: date in `YYYY-MM-DD`
-- `s`: start time in `HH:MM` (24-hour)
-- `e`: end time in `HH:MM` (24-hour)
-- `t`: title string (minimum 2 characters)
+1. Timed event (required: `d`, `s`, `e`, `t`)
+   - `d`: date in `YYYY-MM-DD`
+   - `s`: start time in `HH:MM` (24-hour)
+   - `e`: end time in `HH:MM` (24-hour), and `s < e`
+   - `t`: title string (minimum 2 characters)
+
+2. All-day event (required: `d`, `t`, `ad: true`; optional: `ed`)
+   - `d`: start date in `YYYY-MM-DD` (inclusive)
+   - `ad`: must be `true`
+   - `t`: title string (minimum 2 characters)
+   - `ed` (optional): exclusive end date in `YYYY-MM-DD`
+     - missing `ed` => single-day all-day event
+     - present `ed` => multi-day all-day span, and `ed` must be after `d`
+
+Field-mixing is invalid:
+- all-day events cannot include `s` or `e`
+- timed events cannot include `ed` or `ad`
 
 Additional validation rules are enforced in `functions/_lib/schema.js`:
-
 - No unexpected top-level or event fields.
 - Maximum of 35 events.
-- No duplicate events with identical `d|s|e|t` keys.
-- Timed events must satisfy `s < e`.
-- All-day event fields (for example `ad`) are rejected.
+- No duplicate events with deterministic keys:
+  - timed: `d|s|e|t`
+  - all-day: `d|ed-or-d|all-day|t`
 
-### Contract compatibility
+## Contract Reference Samples (Drift Checks)
 
-To prevent drift, treat this as a single source-of-truth contract across **all three** layers:
+The following compact payload samples are canonical and copy-paste valid:
 
-- prompt rules in `chatgpt-project/INSTRUCTIONS.md`
-- generation schema in `chatgpt-project/schedule.schema.json`
-- runtime validation in `functions/_lib/schema.js`
+```json
+{
+  "tz": "Europe/Sofia",
+  "ev": [
+    { "d": "2026-04-27", "s": "18:00", "e": "19:00", "t": "Балет" },
+    { "d": "2026-04-28", "ad": true, "t": "СФП" },
+    { "d": "2026-04-29", "ed": "2026-05-02", "ad": true, "t": "Танци" }
+  ]
+}
+```
 
-If one changes, update the other two in the same commit.
+## Change Together Rule
+
+To prevent schema drift, any contract update must modify these files in the **same commit**:
+
+- `chatgpt-project/schedule.schema.json`
+- `chatgpt-project/INSTRUCTIONS.md`
+- `functions/_lib/schema.js`
+- `web/import.html`
 
 ## API Endpoints
 
@@ -132,7 +158,6 @@ This repo is configured for Netlify:
 > Note: if you deploy this exact repository, ensure your function source layout matches your build setup. If your functions are in `functions/`, either move/copy them to `netlify/functions` or update `netlify.toml` accordingly.
 
 ## Usage Flow
-
 
 > Note: `payload64` must be encoded as `deflate-raw+base64url`; plain `deflate` is not accepted by the current decoder implementation.
 1. Open `/import`.
