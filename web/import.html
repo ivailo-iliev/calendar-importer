@@ -295,7 +295,17 @@
         const response = await fetch("/.netlify/functions/runtime-config", {
           headers: { accept: "application/json" },
         });
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          const bodyPreview = (await response.text()).slice(0, 120).trim();
+          throw new Error(
+            `Expected JSON from runtime-config but received ${contentType || "unknown content type"}${bodyPreview ? `: ${bodyPreview}` : ""}`,
+          );
+        }
         const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load runtime config.");
+        }
         googleClientId = data.googleClientId || "";
         if (!googleClientId) {
           setStatus("Missing GOOGLE_CLIENT_ID in Netlify environment.", "error");
