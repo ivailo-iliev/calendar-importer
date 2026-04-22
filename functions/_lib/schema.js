@@ -45,18 +45,6 @@ function parseTimeMinutes(value) {
   return hour * 60 + minute;
 }
 
-function isValidTimeZone(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return false;
-  }
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value });
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
 function validatePayload(payload) {
   const errors = [];
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -69,11 +57,15 @@ function validatePayload(payload) {
       errors.push(`Unexpected top-level field: ${key}`);
     }
   }
-  const hasTz = Object.prototype.hasOwnProperty.call(payload, "tz");
-  const normalizedTimeZone = hasTz ? String(payload.tz || "").trim() : TIME_ZONE;
-  if (hasTz && !isValidTimeZone(normalizedTimeZone)) {
-    errors.push("tz must be a valid IANA timezone.");
+
+  if (!Object.prototype.hasOwnProperty.call(payload, "tz")) {
+    errors.push("tz is required.");
   }
+  const normalizedTimeZone = typeof payload.tz === "string" ? payload.tz.trim() : "";
+  if (normalizedTimeZone !== TIME_ZONE) {
+    errors.push(`tz must equal ${TIME_ZONE}.`);
+  }
+
   if (!Array.isArray(payload.ev)) {
     errors.push("ev must be an array.");
     return { errors, normalized: null };
@@ -89,52 +81,47 @@ function validatePayload(payload) {
       errors.push(`ev[${index}] must be an object.`);
       return;
     }
+
     const eventKeys = Object.keys(event);
-    const allowedEventKeys = new Set(["d", "s", "e", "t", "ad"]);
+    const allowedEventKeys = new Set(["d", "s", "e", "t"]);
     for (const key of eventKeys) {
       if (!allowedEventKeys.has(key)) {
         errors.push(`ev[${index}] has unexpected field: ${key}`);
       }
     }
-    const { d, s, e, t, ad } = event;
+
+    const { d, s, e, t } = event;
     if (typeof d !== "string" || !parseDateParts(d)) {
       errors.push(`ev[${index}].d must be a valid ISO date.`);
     }
-    const isAllDay = ad === true;
+
     const startMinutes = typeof s === "string" ? parseTimeMinutes(s) : null;
     const endMinutes = typeof e === "string" ? parseTimeMinutes(e) : null;
+    if (startMinutes === null) {
+      errors.push(`ev[${index}].s must be a valid HH:MM time.`);
+    }
+    if (endMinutes === null) {
+      errors.push(`ev[${index}].e must be a valid HH:MM time.`);
+    }
+    if (startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes) {
+      errors.push(`ev[${index}] must end after it starts.`);
+    }
+
     if (typeof t !== "string" || t.trim().length < 2) {
       errors.push(`ev[${index}].t must be a string with at least 2 characters.`);
     }
-    if (isAllDay) {
-      if (typeof s !== "undefined" || typeof e !== "undefined") {
-        errors.push(`ev[${index}] all-day events must not include s or e.`);
-      }
-    } else {
-      if (startMinutes === null) {
-        errors.push(`ev[${index}].s must be a valid HH:MM time.`);
-      }
-      if (endMinutes === null) {
-        errors.push(`ev[${index}].e must be a valid HH:MM time.`);
-      }
-      if (startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes) {
-        errors.push(`ev[${index}] must end after it starts.`);
-      }
-    }
+
     const normalizedTitle = typeof t === "string" ? t.trim() : t;
-    const dedupeKey = [d, isAllDay ? "all-day" : s, isAllDay ? "" : e, normalizedTitle].join("|");
-    if (d && normalizedTitle && (isAllDay || (s && e))) {
+    const dedupeKey = [d, s, e, normalizedTitle].join("|");
+    if (d && s && e && normalizedTitle) {
       if (seenPayloadKeys.has(dedupeKey)) {
         errors.push(`ev[${index}] duplicates another event in the payload.`);
       } else {
         seenPayloadKeys.add(dedupeKey);
       }
     }
-    normalized.push(
-      isAllDay
-        ? { d, t: normalizedTitle, ad: true }
-        : { d, s, e, t: normalizedTitle }
-    );
+
+    normalized.push({ d, s, e, t: normalizedTitle });
   });
 
   return {
@@ -142,7 +129,7 @@ function validatePayload(payload) {
     normalized: errors.length
       ? null
       : {
-          tz: isValidTimeZone(normalizedTimeZone) ? normalizedTimeZone : TIME_ZONE,
+          tz: TIME_ZONE,
           ev: normalized,
         },
   };

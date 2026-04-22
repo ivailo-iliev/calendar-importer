@@ -38,3 +38,5 @@ End-time rules:
   - `Растяжки` ends 30 minutes after start.
   - `Балет` ends 2 hours after start.
   - every other allowed title ends 1 hour after start.
+
+Contract compatibility note: keep this prompt, `schedule.schema.json`, and `functions/_lib/schema.js` aligned as one contract. Any format change must update all three together.
