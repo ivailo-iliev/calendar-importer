@@ -147,11 +147,16 @@
         position: relative;
       }
 
-      .format-overlay {
+      .overlay-actions {
         position: absolute;
         top: 0.75rem;
         right: 0.75rem;
         z-index: 1;
+        display: inline-flex;
+        gap: 0.5rem;
+      }
+
+      .overlay-action {
         min-width: 2.75rem;
         min-height: 2.75rem;
         padding: 0;
@@ -212,13 +217,22 @@
         <div id="status" class="status">Loading configuration…</div>
         <div class="grid">
           <div class="editor">
-            <button
-              id="format-json"
-              type="button"
-              class="format-overlay secondary"
-              aria-label="Format JSON"
-              title="Format JSON"
-            >✨</button>
+            <div class="overlay-actions">
+              <button
+                id="paste-json"
+                type="button"
+                class="overlay-action secondary"
+                aria-label="Paste JSON"
+                title="Paste JSON"
+              >📋</button>
+              <button
+                id="format-json"
+                type="button"
+                class="overlay-action secondary"
+                aria-label="Format JSON"
+                title="Format JSON"
+              >✨</button>
+            </div>
             <textarea id="payload" spellcheck="false"></textarea>
           </div>
         </div>
@@ -232,6 +246,7 @@
       const statusEl = document.getElementById("status");
       const payloadEl = document.getElementById("payload");
       const authActionBtn = document.getElementById("auth-action");
+      const pasteBtn = document.getElementById("paste-json");
       const formatBtn = document.getElementById("format-json");
       const createBtn = document.getElementById("create-events");
       const calendarSelectEl = document.getElementById("calendar-select");
@@ -613,6 +628,12 @@
         }
       }
 
+      function formatPayloadFromEditor() {
+        const parsed = JSON.parse(payloadEl.value);
+        const expanded = toExpandedPayload(toCompactPayload(parsed));
+        payloadEl.value = JSON.stringify(expanded, null, 2);
+      }
+
       authActionBtn.addEventListener("click", () => {
         if (authInProgress) return;
         if (accessToken) {
@@ -637,12 +658,24 @@
 
       formatBtn.addEventListener("click", () => {
         try {
-          const parsed = JSON.parse(payloadEl.value);
-          const expanded = toExpandedPayload(toCompactPayload(parsed));
-          payloadEl.value = JSON.stringify(expanded, null, 2);
+          formatPayloadFromEditor();
           setStatus("JSON formatted.", "ok");
         } catch (error) {
           setStatus(`Cannot format JSON: ${error.message}`, "error");
+        }
+      });
+
+      pasteBtn.addEventListener("click", async () => {
+        if (!navigator.clipboard || typeof navigator.clipboard.readText !== "function") {
+          setStatus("Clipboard paste is not supported in this browser.", "error");
+          return;
+        }
+        try {
+          payloadEl.value = await navigator.clipboard.readText();
+          formatPayloadFromEditor();
+          setStatus("JSON pasted and formatted.", "ok");
+        } catch (error) {
+          setStatus(`Cannot paste JSON: ${error.message}`, "error");
         }
       });
 
