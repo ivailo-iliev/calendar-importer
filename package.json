@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "description": "Netlify import page and functions for schedule JSON calendar creation.",
+  "scripts": {
+    "test": "node --test"
+  },
   "dependencies": {
     "googleapis": "^148.0.0"
   }

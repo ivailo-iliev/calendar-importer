@@ -121,9 +121,10 @@ Field-mixing is invalid:
 Additional validation rules are enforced in `functions/_lib/schema.js`:
 - No unexpected top-level or event fields.
 - Maximum of 35 events.
-- No duplicate events with deterministic keys:
-  - timed: `d|s|e|t`
-  - all-day: `d|ed-or-d|all-day|t`
+- No duplicate events within the same group, using deterministic keys:
+  - timed: `d|s|e|t|g`
+  - all-day: `d|ed-or-d|all-day|t|g`
+  Events with matching dates, times, and titles remain distinct when their `g` values differ.
 
 ## Contract Reference Samples (Drift Checks)
 
