@@ -49,6 +49,14 @@ function compareIsoDates(a, b) {
   return a.localeCompare(b);
 }
 
+function eventDedupeKey(event) {
+  const group = typeof event.g === "string" ? event.g.trim() : "";
+  if (event.ad) {
+    return [event.d, event.ed || event.d, "all-day", event.t, group].join("|");
+  }
+  return [event.d, event.s, event.e, event.t, group].join("|");
+}
+
 function validatePayload(payload) {
   const errors = [];
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -126,7 +134,7 @@ function validatePayload(payload) {
         errors.push(`ev[${index}].g must be a non-empty string when provided.`);
       }
 
-      const dedupeKey = [d, ed || d, "all-day", t].join("|");
+      const dedupeKey = eventDedupeKey({ d, ed, ad: true, t, g });
       if (d && t) {
         if (seenPayloadKeys.has(dedupeKey)) {
           errors.push(`ev[${index}] duplicates another event in the payload.`);
@@ -175,7 +183,7 @@ function validatePayload(payload) {
       errors.push(`ev[${index}].g must be a non-empty string when provided.`);
     }
 
-    const dedupeKey = [d, s, e, t].join("|");
+    const dedupeKey = eventDedupeKey({ d, s, e, t, g });
     if (d && s && e && t) {
       if (seenPayloadKeys.has(dedupeKey)) {
         errors.push(`ev[${index}] duplicates another event in the payload.`);
@@ -200,6 +208,7 @@ function validatePayload(payload) {
 
 module.exports = {
   TIME_ZONE,
+  eventDedupeKey,
   parsePayload,
   validatePayload,
 };

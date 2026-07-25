@@ -1,7 +1,7 @@
 "use strict";
 
 const { google } = require("googleapis");
-const { parsePayload, validatePayload } = require("./_lib/schema");
+const { eventDedupeKey, parsePayload, validatePayload } = require("./_lib/schema");
 
 function json(statusCode, body) {
   return {
@@ -20,11 +20,9 @@ function resolveCalendarId(event) {
   return value || "primary";
 }
 
-function payloadEventKey(item) {
-  if (item.ad) {
-    return [item.d, item.ed || item.d, "all-day", item.t].join("|");
-  }
-  return [item.d, item.s, item.e, item.t].join("|");
+function calendarEventGroup(event) {
+  const description = typeof event.description === "string" ? event.description : "";
+  return description.startsWith("Group: ") ? description.slice(7).trim() : "";
 }
 
 function formatDateInZone(dateTime, timeZone) {
@@ -57,7 +55,13 @@ function calendarEventKey(event, timeZone) {
     return null;
   }
   if (event.start.date && event.end.date) {
-    return [event.start.date, event.end.date || event.start.date, "all-day", normalizedSummary].join("|");
+    return eventDedupeKey({
+      d: event.start.date,
+      ed: event.end.date || event.start.date,
+      ad: true,
+      t: normalizedSummary,
+      g: calendarEventGroup(event),
+    });
   }
   if (!event.start.dateTime || !event.end.dateTime) {
     return null;
@@ -67,12 +71,13 @@ function calendarEventKey(event, timeZone) {
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return null;
   }
-  return [
-    formatDateInZone(start, timeZone),
-    formatTimeInZone(start, timeZone),
-    formatTimeInZone(end, timeZone),
-    normalizedSummary,
-  ].join("|");
+  return eventDedupeKey({
+    d: formatDateInZone(start, timeZone),
+    s: formatTimeInZone(start, timeZone),
+    e: formatTimeInZone(end, timeZone),
+    t: normalizedSummary,
+    g: calendarEventGroup(event),
+  });
 }
 
 function nextDate(dateStr) {
@@ -146,7 +151,7 @@ exports.handler = async function handler(event) {
 
     const results = [];
     for (const item of normalized.ev) {
-      const key = payloadEventKey(item);
+      const key = eventDedupeKey(item);
       if (existingKeys.has(key)) {
         results.push({
           d: item.d,
