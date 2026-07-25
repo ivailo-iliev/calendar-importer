@@ -407,6 +407,10 @@
             if (typeof event.t !== "string" || !event.t.trim()) {
               throw new Error(`ev[${index}].t must be a non-empty string.`);
             }
+            const group = Object.prototype.hasOwnProperty.call(event, "g") ? String(event.g).trim() : "";
+            if (Object.prototype.hasOwnProperty.call(event, "g") && !group) {
+              throw new Error(`ev[${index}].g must be a non-empty group value.`);
+            }
             if (allDay) {
               if (Object.prototype.hasOwnProperty.call(event, "ed")) {
                 if (!isValidDate(event.ed) || event.ed <= event.d) {
@@ -414,13 +418,13 @@
                 }
               }
               return event.ed
-                ? { d: event.d, ed: event.ed, ad: true, t: event.t.trim() }
-                : { d: event.d, ad: true, t: event.t.trim() };
+                ? { d: event.d, ed: event.ed, ad: true, t: event.t.trim(), ...(group ? { g: group } : {}) }
+                : { d: event.d, ad: true, t: event.t.trim(), ...(group ? { g: group } : {}) };
             }
             if (!isValidTime(event.s) || !isValidTime(event.e) || event.e <= event.s) {
               throw new Error(`ev[${index}] timed events require valid s/e with s < e.`);
             }
-            return { d: event.d, s: event.s, e: event.e, t: event.t.trim() };
+            return { d: event.d, s: event.s, e: event.e, t: event.t.trim(), ...(group ? { g: group } : {}) };
           });
           return {
             tz: typeof parsed.tz === "string" && parsed.tz.trim() ? parsed.tz.trim() : "Europe/Sofia",
@@ -446,6 +450,10 @@
           if (typeof event.title !== "string" || !event.title.trim()) {
             throw new Error(`events[${index}].title must be a non-empty string.`);
           }
+          const group = Object.prototype.hasOwnProperty.call(event, "group") ? String(event.group).trim() : "";
+          if (Object.prototype.hasOwnProperty.call(event, "group") && !group) {
+            throw new Error(`events[${index}].group must be a non-empty group value.`);
+          }
           if (allDay) {
             if (Object.prototype.hasOwnProperty.call(event, "start") || Object.prototype.hasOwnProperty.call(event, "end")) {
               throw new Error(`events[${index}] cannot include start/end when allDay is true.`);
@@ -454,9 +462,9 @@
               if (!isValidDate(event.endDate) || event.endDate <= event.date) {
                 throw new Error(`events[${index}].endDate must be after date (exclusive end).`);
               }
-              return { d: event.date, ed: event.endDate, ad: true, t: event.title.trim() };
+              return { d: event.date, ed: event.endDate, ad: true, t: event.title.trim(), ...(group ? { g: group } : {}) };
             }
-            return { d: event.date, ad: true, t: event.title.trim() };
+            return { d: event.date, ad: true, t: event.title.trim(), ...(group ? { g: group } : {}) };
           }
           if (Object.prototype.hasOwnProperty.call(event, "endDate")) {
             throw new Error(`events[${index}] timed events cannot include endDate.`);
@@ -464,7 +472,7 @@
           if (!isValidTime(event.start) || !isValidTime(event.end) || event.end <= event.start) {
             throw new Error(`events[${index}] timed events require valid start/end with start < end.`);
           }
-          return { d: event.date, s: event.start, e: event.end, t: event.title.trim() };
+          return { d: event.date, s: event.start, e: event.end, t: event.title.trim(), ...(group ? { g: group } : {}) };
         });
         return { tz: timezone, ev };
       }
@@ -480,12 +488,14 @@
                   allDay: true,
                   ...(event.ed ? { endDate: event.ed } : {}),
                   title: event.t,
+                  ...(event.g ? { group: event.g } : {}),
                 }
               : {
                   date: event.d,
                   start: event.s,
                   end: event.e,
                   title: event.t,
+                  ...(event.g ? { group: event.g } : {}),
                 }
           )),
         };

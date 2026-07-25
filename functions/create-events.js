@@ -162,6 +162,7 @@ exports.handler = async function handler(event) {
         calendarId,
         requestBody: {
           summary: item.t,
+          ...(item.g ? { description: `Group: ${item.g}` } : {}),
           start: item.ad
             ? { date: item.d }
             : {

@@ -79,7 +79,8 @@ Expanded JSON shape accepted by the UI:
       "date": "2026-04-27",
       "start": "18:00",
       "end": "19:00",
-      "title": "Балет"
+      "title": "Балет",
+      "group": "2"
     },
     {
       "date": "2026-04-28",
@@ -102,11 +103,13 @@ Exactly two canonical event types are accepted:
    - `s`: start time in `HH:MM` (24-hour)
    - `e`: end time in `HH:MM` (24-hour), and `s < e`
    - `t`: title string (minimum 2 characters)
+   - `g` (optional): group number or label as a non-empty string
 
 2. All-day event (required: `d`, `t`, `ad: true`; optional: `ed`)
    - `d`: start date in `YYYY-MM-DD` (inclusive)
    - `ad`: must be `true`
    - `t`: title string (minimum 2 characters)
+   - `g` (optional): group number or label as a non-empty string
    - `ed` (optional): exclusive end date in `YYYY-MM-DD`
      - missing `ed` => single-day all-day event
      - present `ed` => multi-day all-day span, and `ed` must be after `d`
@@ -130,7 +133,7 @@ The following compact payload samples are canonical and copy-paste valid:
 {
   "tz": "Europe/Sofia",
   "ev": [
-    { "d": "2026-04-27", "s": "18:00", "e": "19:00", "t": "Балет" },
+    { "d": "2026-04-27", "s": "18:00", "e": "19:00", "t": "Балет", "g": "2" },
     { "d": "2026-04-28", "ad": true, "t": "СФП" },
     { "d": "2026-04-29", "ed": "2026-05-02", "ad": true, "t": "Танци" }
   ]
@@ -179,7 +182,7 @@ Behavior:
 
 - Loads existing events in the payload date range.
 - Skips duplicates already present.
-- Inserts non-duplicate events and returns per-event results.
+- Inserts non-duplicate events and returns per-event results. Events with `g` receive a Google Calendar description in the form `Group: <group>`.
 
 ## Deployment
 

@@ -43,6 +43,10 @@
               "t": {
                 "type": "string",
                 "minLength": 2
+              },
+              "g": {
+                "type": "string",
+                "minLength": 1
               }
             }
           },
@@ -69,6 +73,10 @@
               "t": {
                 "type": "string",
                 "minLength": 2
+              },
+              "g": {
+                "type": "string",
+                "minLength": 1
               }
             }
           }
@@ -76,5 +84,5 @@
       }
     }
   },
-  "$comment": "Canonical compact contract: timed events require d/s/e/t; all-day events require d/t/ad:true with optional ed. Titles are free-form strings at the schema level so prompt rules can allow either mapped dictionary titles or specific user-requested custom titles. The ed field uses exclusive end-date semantics (same as Google Calendar all-day end.date). Missing ed means a single-day all-day event and runtime derives end.date as d+1 day; present ed means a multi-day span from d inclusive to ed exclusive, so ed must be after d. Rules for generating JSON: The image is a 7-column week view ordered left to right. If at least one column date is readable, that day is the anchor day and all other column dates are inferred by adding or subtracting whole days from the anchor based on column position. Every event must contain its final absolute ISO date. Use only dates in the current month or next month relative to import time, and never place events in the past. If interpreting a day number in the current month would place an event in the past, roll it to the next month. If no column date is readable at all, emit no events. Events within the same day are ordered by start time. For every event except the last event of the day, end time equals the next event start time. For the last event of the day, duration is 30 minutes for Растяжки, 2 hours for Балет, and 1 hour otherwise."
+  "$comment": "Canonical compact contract: timed events require d/s/e/t; all-day events require d/t/ad:true with optional ed. Optional g carries the visible group number or label. Titles are free-form strings at the schema level so prompt rules can allow either mapped dictionary titles or specific user-requested custom titles. The ed field uses exclusive end-date semantics (same as Google Calendar all-day end.date). Missing ed means a single-day all-day event and runtime derives end.date as d+1 day; present ed means a multi-day span from d inclusive to ed exclusive, so ed must be after d. Rules for generating JSON: The image is a 7-column week view ordered left to right. If at least one column date is readable, that day is the anchor day and all other column dates are inferred by adding or subtracting whole days from the anchor based on column position. Every event must contain its final absolute ISO date. Use only dates in the current month or next month relative to import time, and never place events in the past. If interpreting a day number in the current month would place an event in the past, roll it to the next month. If no column date is readable at all, emit no events. Events within the same day are ordered by start time. For every event except the last event of the day, end time equals the next event start time. For the last event of the day, duration is 30 minutes for Растяжки, 2 hours for Балет, and 1 hour otherwise."
 }
