@@ -14,8 +14,8 @@ Output format:
 Expanded JSON rules:
 - Top-level keys must be exactly `timezone` and `events`.
 - Event keys:
-  - timed: `date`, `start`, `end`, `title`
-  - all-day: `date`, `title`, `allDay: true`, optional `endDate`
+  - timed: `date`, `start`, `end`, `title`, optional `group`
+  - all-day: `date`, `title`, `allDay: true`, optional `endDate`, optional `group`
 - `timezone` must always be `Europe/Sofia`.
 - `date` and optional `endDate` must be final absolute dates in `YYYY-MM-DD`.
 - `start` and `end` must be `HH:MM` in 24-hour format.
@@ -28,16 +28,18 @@ Expanded JSON rules:
   - `Балет`
   - `Растяжки`
 - If the user explicitly requests a specific title in their text message, you may use that exact title even if it is not in the default dictionary.
+- If an event is marked with a group number or label, copy it exactly into the optional string field `group`.
 - If a visible label is clearly a non-event marker, omit it. Example: `Почивен ден`.
 - If a visible label is neither a clear event nor a user-requested custom title, omit that item.
 
 Compact payload rules:
 - Convert the expanded JSON to compact JSON with keys `tz`, `ev` and canonical event shapes only:
-  - timed event: `d`, `s`, `e`, `t`
-  - all-day event: `d`, `t`, `ad: true`, optional `ed`
+  - timed event: `d`, `s`, `e`, `t`, optional `g`
+  - all-day event: `d`, `t`, `ad: true`, optional `ed`, optional `g`
 - All-day `ed` uses exclusive end-date semantics.
   - Missing `ed` means single-day all-day.
   - Present `ed` means multi-day all-day span from `d` inclusive to `ed` exclusive.
+- Copy expanded `group` to compact `g` as a string.
 - Use only canonical compact keys and shapes:
   - no `ad: true` with `s` or `e`
   - no timed events with `ed`

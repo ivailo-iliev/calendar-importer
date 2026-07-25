@@ -92,7 +92,7 @@ function validatePayload(payload) {
     const hasAllDay = event.ad === true;
 
     if (hasAllDay) {
-      const allowedEventKeys = new Set(["d", "ed", "ad", "t"]);
+      const allowedEventKeys = new Set(["d", "ed", "ad", "t", "g"]);
       for (const key of eventKeys) {
         if (!allowedEventKeys.has(key)) {
           errors.push(`ev[${index}] has unexpected field for all-day event: ${key}`);
@@ -102,6 +102,7 @@ function validatePayload(payload) {
       const d = typeof event.d === "string" ? event.d.trim() : "";
       const ed = typeof event.ed === "string" ? event.ed.trim() : undefined;
       const t = typeof event.t === "string" ? event.t.trim() : "";
+      const g = typeof event.g === "string" ? event.g.trim() : "";
 
       if (!d || !parseDateParts(d)) {
         errors.push(`ev[${index}].d must be a valid ISO date.`);
@@ -121,6 +122,9 @@ function validatePayload(payload) {
       if (typeof event.t !== "string" || t.length < 2) {
         errors.push(`ev[${index}].t must be a string with at least 2 characters.`);
       }
+      if (Object.prototype.hasOwnProperty.call(event, "g") && !g) {
+        errors.push(`ev[${index}].g must be a non-empty string when provided.`);
+      }
 
       const dedupeKey = [d, ed || d, "all-day", t].join("|");
       if (d && t) {
@@ -131,11 +135,11 @@ function validatePayload(payload) {
         }
       }
 
-      normalized.push(ed ? { d, ed, ad: true, t } : { d, ad: true, t });
+      normalized.push({ d, ...(ed ? { ed } : {}), ad: true, t, ...(g ? { g } : {}) });
       return;
     }
 
-    const allowedEventKeys = new Set(["d", "s", "e", "t"]);
+    const allowedEventKeys = new Set(["d", "s", "e", "t", "g"]);
     for (const key of eventKeys) {
       if (!allowedEventKeys.has(key)) {
         errors.push(`ev[${index}] has unexpected field for timed event: ${key}`);
@@ -146,6 +150,7 @@ function validatePayload(payload) {
     const s = typeof event.s === "string" ? event.s.trim() : "";
     const e = typeof event.e === "string" ? event.e.trim() : "";
     const t = typeof event.t === "string" ? event.t.trim() : "";
+    const g = typeof event.g === "string" ? event.g.trim() : "";
 
     if (!d || !parseDateParts(d)) {
       errors.push(`ev[${index}].d must be a valid ISO date.`);
@@ -166,6 +171,9 @@ function validatePayload(payload) {
     if (typeof event.t !== "string" || t.length < 2) {
       errors.push(`ev[${index}].t must be a string with at least 2 characters.`);
     }
+    if (Object.prototype.hasOwnProperty.call(event, "g") && !g) {
+      errors.push(`ev[${index}].g must be a non-empty string when provided.`);
+    }
 
     const dedupeKey = [d, s, e, t].join("|");
     if (d && s && e && t) {
@@ -176,7 +184,7 @@ function validatePayload(payload) {
       }
     }
 
-    normalized.push({ d, s, e, t });
+    normalized.push({ d, s, e, t, ...(g ? { g } : {}) });
   });
 
   return {

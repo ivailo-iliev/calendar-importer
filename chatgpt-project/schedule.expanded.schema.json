@@ -43,6 +43,10 @@
               "title": {
                 "type": "string",
                 "minLength": 2
+              },
+              "group": {
+                "type": "string",
+                "minLength": 1
               }
             }
           },
@@ -69,6 +73,10 @@
               "title": {
                 "type": "string",
                 "minLength": 2
+              },
+              "group": {
+                "type": "string",
+                "minLength": 1
               }
             }
           }
@@ -76,5 +84,5 @@
       }
     }
   },
-  "$comment": "Expanded editor contract: top-level timezone/events. Timed events require date/start/end/title. All-day events require date/title/allDay:true with optional endDate. Titles are free-form strings at the schema level so prompt rules can allow either mapped dictionary titles or specific user-requested custom titles. The endDate field uses exclusive end-date semantics (same as Google Calendar all-day end.date). Missing endDate means a single-day all-day event; present endDate means a multi-day span from date inclusive to endDate exclusive."
+  "$comment": "Expanded editor contract: top-level timezone/events. Timed events require date/start/end/title. All-day events require date/title/allDay:true with optional endDate. Optional group carries the visible group number or label. Titles are free-form strings at the schema level so prompt rules can allow either mapped dictionary titles or specific user-requested custom titles. The endDate field uses exclusive end-date semantics (same as Google Calendar all-day end.date). Missing endDate means a single-day all-day event; present endDate means a multi-day span from date inclusive to endDate exclusive."
 }
