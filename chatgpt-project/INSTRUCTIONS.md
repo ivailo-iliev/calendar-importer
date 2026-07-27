@@ -29,6 +29,7 @@ Expanded JSON rules:
   - `Растяжки`
 - If the user explicitly requests a specific title in their text message, you may use that exact title even if it is not in the default dictionary.
 - If an event is marked with a group number or label, copy it exactly into the optional string field `group`.
+- When two groups train with the same coach at the same time, emit one event rather than two and combine the group numbers in the `group` field with a comma and no spaces (for example, `"group": "1,2"`). This produces the calendar tag `Group:1,2`.
 - If a visible label is clearly a non-event marker, omit it. Example: `Почивен ден`.
 - If a visible label is neither a clear event nor a user-requested custom title, omit that item.
 

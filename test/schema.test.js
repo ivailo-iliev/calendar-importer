@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { validatePayload } = require("../functions/_lib/schema");
+const { _test: createEvents } = require("../functions/create-events");
 
 const baseEvent = { d: "2026-07-25", s: "10:50", e: "11:40", t: "Балет" };
 
@@ -14,6 +15,22 @@ test("allows otherwise identical events assigned to different groups", () => {
 
   assert.deepEqual(result.errors, []);
   assert.equal(result.normalized.ev.length, 2);
+});
+
+test("allows a combined group tag for groups training together", () => {
+  const result = validatePayload({
+    tz: "Europe/Sofia",
+    ev: [{ ...baseEvent, g: "1,2" }],
+  });
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.normalized.ev[0].g, "1,2");
+  assert.equal(createEvents.groupDescription(result.normalized.ev[0].g), "Group:1,2");
+});
+
+test("reads both current and legacy group descriptions for duplicate detection", () => {
+  assert.equal(createEvents.calendarEventGroup({ description: "Group:1,2" }), "1,2");
+  assert.equal(createEvents.calendarEventGroup({ description: "Group: 1,2" }), "1,2");
 });
 
 test("rejects identical events assigned to the same group", () => {
