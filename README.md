@@ -183,7 +183,8 @@ Behavior:
 
 - Loads existing events in the payload date range.
 - Skips duplicates already present.
-- Inserts non-duplicate events and returns per-event results. Events with `g` receive a Google Calendar description in the form `Group: <group>`.
+- Inserts non-duplicate events and returns per-event results. Events with `g` receive a Google Calendar description in the form `Group:<group>`.
+- When two groups train with the same coach at the same time, the extraction rules combine them into one event with a comma-separated group value (for example, `g: "1,2"`), which is written to Google Calendar as `Group:1,2`.
 
 ## Deployment
 

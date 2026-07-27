@@ -22,7 +22,12 @@ function resolveCalendarId(event) {
 
 function calendarEventGroup(event) {
   const description = typeof event.description === "string" ? event.description : "";
-  return description.startsWith("Group: ") ? description.slice(7).trim() : "";
+  const match = description.match(/^Group:\s*(.+)$/);
+  return match ? match[1].trim() : "";
+}
+
+function groupDescription(group) {
+  return `Group:${group}`;
 }
 
 function formatDateInZone(dateTime, timeZone) {
@@ -167,7 +172,7 @@ exports.handler = async function handler(event) {
         calendarId,
         requestBody: {
           summary: item.t,
-          ...(item.g ? { description: `Group: ${item.g}` } : {}),
+          ...(item.g ? { description: groupDescription(item.g) } : {}),
           start: item.ad
             ? { date: item.d }
             : {
@@ -208,3 +213,5 @@ exports.handler = async function handler(event) {
     return json(502, { error: message });
   }
 };
+
+exports._test = { calendarEventGroup, groupDescription };
